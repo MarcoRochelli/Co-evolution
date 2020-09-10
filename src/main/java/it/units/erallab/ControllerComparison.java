@@ -72,6 +72,8 @@ import static it.units.malelab.jgea.core.util.Args.*;
  * @created 2020/08/18
  * @project VSREvolution
  */
+
+// mia versione
 public class ControllerComparison extends Worker {
 
   public static final int CACHE_SIZE = 10000;
