@@ -67,12 +67,6 @@ import java.util.stream.Collectors;
 
 import static it.units.malelab.jgea.core.util.Args.*;
 
-/**
- * @author eric
- * @created 2020/08/18
- * @project VSREvolution
- */
-
 // mia versione
 public class ControllerComparison extends Worker {
 
@@ -84,15 +78,6 @@ public class ControllerComparison extends Worker {
 
   public static void main(String[] args) {
     new ControllerComparison(args);
-  }
-
-  private interface IODimMapper extends Function<Grid<? extends SensingVoxel>, Pair<Integer, Integer>> {
-  }
-
-  private interface RobotMapper extends Function<Grid<? extends SensingVoxel>, Function<Function<double[], double[]>, Robot<?>>> {
-  }
-
-  private interface EvolverMapper extends BiFunction<Pair<IODimMapper, RobotMapper>, Grid<? extends SensingVoxel>, Evolver<?, Robot<?>, Double>> {
   }
 
   @Override
@@ -124,14 +109,16 @@ public class ControllerComparison extends Worker {
     }
     Settings physicsSettings = new Settings();
     //prepare file listeners
-    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>(
-        a("dir", "."),
-        a("statsFile", null)
+    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
+            a("dir", "C:\\Users\\marco\\Desktop")),
+            a("fileStats", "stats.txt")
     );
-    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>(
-        a("dir", "."),
-        a("serializedFile", null)
+
+    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
+            a("dir", "C:\\Users\\marco\\Desktop")),
+            a("fileSerialized", "serialized.txt")
     );
+
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
     try {
@@ -281,6 +268,15 @@ public class ControllerComparison extends Worker {
     } catch (IOException e) {
       L.severe(String.format("Cannot close printer for validation results due to %s", e));
     }
+  }
+
+  private interface IODimMapper extends Function<Grid<? extends SensingVoxel>, Pair<Integer, Integer>> {
+  }
+
+  private interface RobotMapper extends Function<Grid<? extends SensingVoxel>, Function<Function<double[], double[]>, Robot<?>>> {
+  }
+
+  private interface EvolverMapper extends BiFunction<Pair<IODimMapper, RobotMapper>, Grid<? extends SensingVoxel>, Evolver<?, Robot<?>, Double>> {
   }
 
   private static Pair<IODimMapper, RobotMapper> buildRobotMapper(String name) {

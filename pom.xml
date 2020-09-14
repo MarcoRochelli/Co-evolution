@@ -15,16 +15,7 @@
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>it.units.erallab</groupId>
-            <artifactId>TwoDimHighlyModularSoftRobots</artifactId>
-            <version>1.2.8</version>
-        </dependency>
-        <dependency>
-            <groupId>it.units.malelab</groupId>
-            <artifactId>JGEA</artifactId>
-            <version>1.2.1</version>
-        </dependency>
+
         <dependency>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-source-plugin</artifactId>
@@ -35,6 +26,30 @@
             <artifactId>maven-shade-plugin</artifactId>
             <version>3.2.4</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.7</version>
+        </dependency>
+        <dependency>
+            <groupId>org.dyn4j</groupId>
+            <artifactId>dyn4j</artifactId>
+            <version>3.3.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>it.units.erallab</groupId>
+            <artifactId>VSREvolution</artifactId>
+            <version>0.1.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>it.units.erallab</groupId>
+            <artifactId>VSREvolution</artifactId>
+            <version>0.1.2</version>
+        </dependency>
+
+
     </dependencies>
 
     <build>
