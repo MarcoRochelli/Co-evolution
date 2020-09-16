@@ -3,6 +3,7 @@ package it.units.erallab;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Lists;
 import it.units.erallab.hmsrobots.core.controllers.CentralizedSensing;
+import it.units.erallab.hmsrobots.core.controllers.DistributedSensing;
 import it.units.erallab.hmsrobots.core.controllers.MultiLayerPerceptron;
 import it.units.erallab.hmsrobots.core.controllers.PhaseSin;
 import it.units.erallab.hmsrobots.core.objects.Robot;
@@ -38,16 +39,14 @@ import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.lang3.SerializationUtils;
 import org.dyn4j.dynamics.Settings;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.Serializable;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static it.units.malelab.jgea.core.util.Args.*;
 
@@ -68,12 +67,13 @@ public class MainCoEvo extends Worker {
     public void run() {
         // settings for the simulation UNDERSTAND THEM ALL
         double episodeTime = d(a("episodeT", "10.0"));  // length of simulation?
-        int nBirths = i(a("nBirths", "500"));           // number of robots for a generation or total??
+        int nBirths = i(a("nBirths", "500"));           // total number of robots simulated
+        //HOW DO I CONTROL ROBOT FOR EVERY GENERATION????????
         int[] seeds = ri(a("seed", "0:1"));             // ???? WHAT IS THIS
         //int validationBirthsInterval = i(a("validationBirthsInterval", "100"));
         List<String> terrainNames = l(a("terrain", "flat"));   //flat,uneven5 or what??
         List<String> evolverMapperNames = l(a("evolver", "mlp-0.65-cmaes")); // rules of how to evolve (ex mutationOnly,standardDiv-1|2op,standard-1|2op)
-        List<String> bodyNames = l(a("body", "biped-4x3-f-f"));  // body I THINK I DO NOT NEED THIS
+        List<String> bodyNames = l(a("body", "biped-4x3-f-f"));  // body i thnk i do not need this HOW TO MAKE A 10X10 BODY???
         List<String> transformationNames = l(a("transformations", "identity"));
         List<String> robotMapperNames = l(a("mapper", "centralized"));  // mapper tipe i MUST PUT DISTRIBUTED
         Locomotion.Metric fitnessMetric = Locomotion.Metric.valueOf(a("fitnessMetric", Locomotion.Metric.X_DISTANCE_CORRECTED_EFFICIENCY.name().toLowerCase()).toUpperCase());
@@ -148,10 +148,6 @@ public class MainCoEvo extends Worker {
                                         "transformation", transformationName,
                                         "evolver", evolverMapperName
                                 ));
-
-                                // CREATES THE BODY
-                                Grid<? extends SensingVoxel> body = buildBody(bodyName);
-
                                 //build training task
                                 Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
                                         Utils.buildRobotTransformation(transformationName).andThen(new Locomotion(
@@ -190,6 +186,11 @@ public class MainCoEvo extends Worker {
                                             ))
                                     ).then(listener);
                                 }
+
+
+                                // CREATES THE BODY
+                                Grid<? extends SensingVoxel> body = buildBody(bodyName);
+
                                 try {
                                     Stopwatch stopwatch = Stopwatch.createStarted();
                                     L.info(String.format("Starting %s", keys));
@@ -274,8 +275,21 @@ public class MainCoEvo extends Worker {
     private static Pair<IODimMapper, RobotMapper> buildRobotMapper(String name) {
         String centralized = "centralized";
         String phases = "phases-(?<f>\\d+(\\.\\d+)?)";
+        String distributed = "distributed";
 
         // ADD HERE IF FOR DISTRIBUTED
+        /*
+        if (name.matches(distributed)) {
+            return Pair.of(
+                    body -> Pair.of(DistributedSensing., DistributedSensing.), // i added nOfInputs(body) and nOfOutputs(body) methods and variables in Distibuted sensing in 2hdmsr
+                    body -> f -> new Robot<>(
+                            new DistributedSensing(SerializationUtils.clone(body), 1),
+                            SerializationUtils.clone(body)
+                    )
+            );
+        }
+
+         */
         if (name.matches(centralized)) {
             return Pair.of(
                     body -> Pair.of(CentralizedSensing.nOfInputs(body), CentralizedSensing.nOfOutputs(body)),
@@ -496,6 +510,216 @@ public class MainCoEvo extends Worker {
 
 
 // VECCHIO
+/*
+
+public class MainCoEvo extends Worker {
+
+    public MainCoEvo(String[] args) throws FileNotFoundException {
+        super(args);
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        new MainCoEvo(args);
+    }
+
+    public void run() {
+        // altezza e larghezza massime del robot
+        int width = 5;
+        int height = 5;
+
+        //read parameters TOLTO SHAPE NAMES
+        int[] runs = ri(a("run", "1"));
+        List<String> terrainNames = l(a("terrain", "flat")); //flat,uneven5
+        List<String> evolverNames = l(a("evolver", "standard-2op")); //mutationOnly,standardDiv-1|2op,standard-1|2op  regole sul come si evolve
+        List<String> controllerNames = l(a("controller", "phases"));  // tipi di controllore
+        double finalT = d(a("finalT", "60"));    // quanto dura la simulazione
+        double minDT = d(a("minDT", "0.0333"));   // ha a che fare col tempo di campionamento del segnale generato dal controllore
+        double maxDT = d(a("maxDT", "0.0333"));
+        List<Double> drivingFrequencies = d(l(a("drivingF", "-1")));
+        List<Double> mutationSigmas = d(l(a("mutationSigma", "0.15")));
+        List<Integer> controlStepIntervals = i(l(a("controlStepInterval", "1")));  // va usato in sinergia con minDT
+        int nPop = i(a("npop", "10"));                                 // quanti robottini simulo
+        int iterations = i(a("iterations", "20"));                    // quante generazioni faccio
+        int cacheSize = i(a("cacheSize", "1000"));
+        boolean statsToStandardOutput = b(a("stout", "false"));
+        List<Locomotion.Metric> metrics = Lists.newArrayList(
+                Locomotion.Metric.TRAVEL_X_RELATIVE_VELOCITY // QUA SI CAMBIA LA FITNESS DA RELATIVA AD ALTRO IN CASO
+        );
+        //set voxel builder
+        Voxel.Description builder = Voxel.Description.build();
+        //prepare things                       // mettere bene i percorsi potrebbe essere da cambiare i nomi dei file
+        MultiFileListenerFactory statsListenerFactory = new MultiFileListenerFactory(a("dir", "C:\\Users\\marco\\Desktop\\Tesi\\HMSRevo"), a("fileStats", "stats.txt"));
+        MultiFileListenerFactory serializedBestListenerFactory = new MultiFileListenerFactory(a("dir", "C:\\Users\\marco\\Desktop\\Tesi\\HMSRevo"), a("fileSerialized", "serialized.txt"));
+        //write config
+        if (a("fileConfig", null) != null) {
+            try {
+                Map<String, Object> builderProperties = PropertyUtils.describe(builder);
+                try (PrintStream filePS = new PrintStream(a("dir", "") + File.separator + a("fileConfig", null))) {
+                    for (Map.Entry<String, Object> entry : builderProperties.entrySet()) {
+                        filePS.printf("%s : %s%n", entry.getKey(), entry.getValue().toString());
+                    }
+                }
+            } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException ex) {
+                L.log(Level.SEVERE, String.format("Cannot read builder properties due to %s", ex), ex);
+            } catch (FileNotFoundException ex) {
+                L.log(Level.SEVERE, String.format("Cannot wrtie builder properties on file due to %s", ex), ex);
+            }
+        }
+        //iterate
+        for (int run : runs) {
+            for (String terrainName : terrainNames) {
+                for (String evolverName : evolverNames) {
+                    for (String controllerName : controllerNames) {
+                        for (int controlStepInterval : controlStepIntervals) {
+                            for (double mutationSigma : mutationSigmas) {
+                                for (double drivingFrequency : drivingFrequencies) {
+                                    //il problema da risolvere NON SI TOCCA
+                                    LocomotionProblem problem = new LocomotionProblem(
+                                            finalT, minDT, maxDT,
+                                            Locomotion.createTerrain(terrainName),
+                                            controlStepInterval,
+                                            metrics,
+                                            LocomotionProblem.ApproximationMethod.FINAL_T
+                                    );
+
+                                    // PARTE CHE HO SCRITTO IO
+                                    Grid<Boolean> body = null;       // le cose con il 2 sono con la grid quelle senza con la sequence
+                                    double[] controller = null;
+
+                                    Pair<Grid<Boolean>, double[]> pair;
+                                    pair = Pair.build(body, controller);
+
+                                    Factory<Pair<Grid<Boolean>, double[]>> factory = null;
+                                    NonDeterministicFunction<Pair<Grid<Boolean>, double[]>, Robot.Description> mapper = null;
+
+                                    factory = new PairSequenceFactory(-Math.PI, Math.PI, width, height);
+                                    mapper = Mapper.getPhasesMapper(builder, drivingFrequency);
+
+                                    //prepare evolver  PENSO SIA OK
+                                    Evolver<Pair<Grid<Boolean>, double[]>, Robot.Description, List<Double>> evolver = null;
+
+                                    if (evolverName.equals("mutationOnly")) {
+                                        // prima era così macome è sotto va bene cmq se non meglio evolver2 = new MutationOnly<Pair<Grid<Boolean>, Grid<Double>>, VoxelCompound.Description, List<Double>>(
+                                        evolver = new MutationOnly<>(
+                                                nPop,
+                                                factory,
+                                                new ParetoRanker<>(false),
+                                                mapper,
+                                                new PairGaussianMutation(mutationSigma),
+                                                Lists.newArrayList(new Iterations(iterations)),
+                                                cacheSize,
+                                                false
+                                        );
+                                    } else if (evolverName.startsWith("standard")) {
+                                        Crossover<Pair<Grid<Boolean>, double[]>> crossover;
+                                        crossover = new PairUniformCrossover(Range.closedOpen(-1d, 2d));
+
+                                        Mutation<Pair<Grid<Boolean>, double[]>> mutation;
+                                        mutation = new PairGaussianMutation(mutationSigma);
+
+                                        Map<GeneticOperator<Pair<Grid<Boolean>, double[]>>, Double> operators = new LinkedHashMap<>();
+
+                                        if (evolverName.split("-")[1].equals("1op")) {
+                                            operators.put(crossover.andThen(mutation), 1d);
+                                        } else if (evolverName.split("-")[1].equals("2op")) {
+                                            operators.put(crossover, 0.8d);
+                                            operators.put(mutation, 0.2d);
+                                        }
+                                        if (evolverName.startsWith("standardDiv")) {
+                                            evolver = new StandardWithEnforcedDiversity<Pair<Grid<Boolean>, double[]>, Robot.Description, List<Double>>(
+                                                    100,
+                                                    nPop,
+                                                    factory,
+                                                    new ParetoRanker<>(false),
+                                                    mapper,
+                                                    operators,
+                                                    new Tournament<>(Math.max(Math.round(nPop / 30), 2)),
+                                                    new Worst(),
+                                                    nPop,
+                                                    true,
+                                                    Lists.newArrayList(new Iterations(iterations)),
+                                                    cacheSize
+                                            );
+                                        } else {
+                                            evolver = new StandardEvolver<Pair<Grid<Boolean>, double[]>, Robot.Description, List<Double>>(
+                                                    nPop,
+                                                    factory,
+                                                    new ParetoRanker<>(false),
+                                                    mapper,
+                                                    operators,
+                                                    new Tournament<>(Math.max(Math.round(nPop / 30), 2)),
+                                                    new Worst(),
+                                                    nPop,
+                                                    true,
+                                                    Lists.newArrayList(new Iterations(iterations)),
+                                                    cacheSize,
+                                                    false
+                                            );
+                                        }
+                                    }
+                                    //prepare keys   NON SI TOCCA ALMENO PENSO
+                                    Map<String, String> keys = new LinkedHashMap<>();
+                                    keys.put("evolver", evolverName);
+                                    keys.put("control.step.interval", Integer.toString(controlStepInterval));
+                                    keys.put("controller", controllerName);
+                                    keys.put("run", Integer.toString(run));
+                                    keys.put("n.pop", Integer.toString(nPop));
+                                    keys.put("driving.frequency", Double.toString(drivingFrequency));
+                                    keys.put("mutation.sigma", Double.toString(mutationSigma));
+                                    keys.put("shape", "5x5");                                 // QUI CE SHAPE
+                                    keys.put("terrain", terrainName);
+                                    keys.put("metrics", metrics.stream().map((m) -> m.toString().toLowerCase().replace("_", ".")).collect(Collectors.joining("/")));
+                                    L.info(String.format("Keys: %s", keys));
+                                    //prepare collectors   NON SI TOCCA
+                                    List<DataCollector> statsCollectors = Lists.newArrayList(
+                                            new Static(keys),
+                                            new Basic(),
+                                            new Population(),
+                                            new Diversity(),
+                                            new BestInfo<>(problem.getFitnessFunction(metrics), "%+5.3f"),
+                                            new FunctionOfBest<>(
+                                                    "valid",
+                                                    problem.getFitnessFunction(Lists.newArrayList(Locomotion.Metric.values())),
+                                                    Arrays.stream(Locomotion.Metric.values()).map((m) -> {
+                                                        return m.toString().toLowerCase().replace('_', '.');
+                                                    }).collect(Collectors.toList()),
+                                                    Collections.singletonList("%+5.3f")
+                                            ),// questa sotto è la righa che ho aggiunto per rendere confrontabili lo statse il serialized
+                                            new FunctionOfBest("serialized", (Individual individual) -> Collections.singletonList(new Item("description", Util.lazilySerialize((Serializable) individual.getSolution()), "%s")))
+                                    );
+                                    List<DataCollector> serializedCollectors = Lists.newArrayList(
+                                            new Static(keys),
+                                            new Basic(),
+                                            new BestInfo<>(problem.getFitnessFunction(metrics), "%+5.3f"),
+                                            new FunctionOfBest("serialized", (Individual individual) -> Collections.singletonList(new Item("description", Util.lazilySerialize((Serializable) individual.getSolution()), "%s")))
+                                    );
+                                    //run evolver    NON SI TOCCA
+                                    Random r = new Random(run);
+                                    Listener listener = statsListenerFactory.build(
+                                            statsCollectors.toArray(new DataCollector[statsCollectors.size()])
+                                    ).then(serializedBestListenerFactory.build(
+                                            serializedCollectors.toArray(new DataCollector[serializedCollectors.size()])
+                                    ));
+                                    if (statsToStandardOutput) {
+                                        listener = listener.then(listener(statsCollectors.toArray(new DataCollector[statsCollectors.size()])));
+                                    }
+                                    try {
+                                        evolver.solve(problem, r, executorService, Listener.onExecutor(listener, executorService));
+                                    } catch (InterruptedException | ExecutionException ex) {
+                                        L.log(Level.SEVERE, String.format("Cannot solve problem: %s", ex), ex);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+}
+*/
+
 /*
 
 import com.google.common.base.Stopwatch;

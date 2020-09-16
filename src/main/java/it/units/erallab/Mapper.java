@@ -22,30 +22,28 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.stream.IntStream;
 
-public class Mapper { // compila ed esegue ma non fa quello che deve fare per ora
+public class Mapper {
 
     /* // should i do it with a function???????
-        public static Function<double[] structure, int width, int height, Robot<SensingVoxel>>
-        distributedMapper() {
-            return (double[] structure, int width, int height ,Listener listener) ->{
-            }
-        }
+    Yes of course but better to wait Eric to be sure
+
 
      */
+
     public static Robot<SensingVoxel> distributedMapper(double[] structure, int width, int height) {
-        Settings settings = new Settings();
-        settings.setStepFrequency(1d / 30d);
+        //Settings settings = new Settings();
+        //settings.setStepFrequency(1d / 30d);
         Random random = new Random();
         double threshold = 1d;
 
         // trasformare l'array in una grid
         int c = 0;
         Grid<Boolean> body = Grid.create(width, height);
-        for (double entry : structure){
+        for (double entry : structure) {
             if (entry > threshold) {
-                body.set(c%width,c/width, true);
+                body.set(c % width, c / width, true);
             } else {
-                body.set(c%width, c/width,false);
+                body.set(c % width, c / width, false);
             }
             c = c + 1;
         }
@@ -69,17 +67,25 @@ public class Mapper { // compila ed esegue ma non fa quello che deve fare per or
         Grid<SensingVoxel> voxels = Grid.create(body.getW(), body.getH(), (x, y) -> {
             if (finalBody.get(x, y)) {
                 return new SensingVoxel(List.of( // WHICH ARE THE SENSORS here i put just some
+                        // serializationUtils.sensor clone sensors
+                        /*
                         new TimeFunction(t -> Math.sin(2 * Math.PI * t), -1d, 1d),
                         new Velocity(true, 3d, Velocity.Axis.X, Velocity.Axis.Y),
                         new Average(new Velocity(true, 3d, Velocity.Axis.X, Velocity.Axis.Y), 1d),
                         new Average(new Touch(), 1d),
                         new AreaRatio(),
-                        new ControlPower(settings.getStepFrequency())
+                        new ControlPower(settings.getStepFrequency()),
+
+                         */
+                        new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
+                        new Normalization(new AreaRatio())
+                        //
                 ));
             }
             return null;
         });
 
+        // there is a method that returns dimension of
         // crea un controllore distribuito
         DistributedSensing distributedSensing = new DistributedSensing(SerializationUtils.clone(voxels), 1);
         for (Grid.Entry<SensingVoxel> entry : voxels) {
@@ -113,16 +119,16 @@ public class Mapper { // compila ed esegue ma non fa quello che deve fare per or
                 new Settings()
         );
 
-        double[] body = new double[]{2d, 0d, 2d, 2d, 2d, 2d, 2d, 2d, 0d, 2d, 2d, 2d};
-        Robot<SensingVoxel> mostro = distributedMapper(body,4,3);  //
+        double[] body = new double[]{2d, 2d, 2d, 0d, 0d, 0d, 0d, 0d, 2d, 2d, 2d, 2d};
+        Robot<SensingVoxel> mostro = distributedMapper(body, 4, 3);
 
 
-        Grid<Pair<String, Robot<?>>> namedSolutionGrid = Grid.create(1, 1);// faccio un grafico uno per uno
-        namedSolutionGrid.set(0, 0, Pair.of("mostro", mostro)); // ci metto dentro mostro
-        ScheduledExecutorService uiExecutor = Executors.newScheduledThreadPool(4); // penso il numero di core che ha a disposizione??
+        Grid<Pair<String, Robot<?>>> namedSolutionGrid = Grid.create(1, 1);// i create a one for one graphic
+        namedSolutionGrid.set(0, 0, Pair.of("mostro", mostro));        // where i put mostro
+        ScheduledExecutorService uiExecutor = Executors.newScheduledThreadPool(4); // number of available core??
         ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         GridOnlineViewer gridOnlineViewer = new GridOnlineViewer(Grid.create(namedSolutionGrid, Pair::getLeft), uiExecutor);
-        gridOnlineViewer.start(1); // ritardo prima di mostrare la simulazione
+        gridOnlineViewer.start(1); // delay before showing the video simulation
         GridEpisodeRunner<Robot<?>> runner = new GridEpisodeRunner<>(
                 namedSolutionGrid,
                 locomotion,
