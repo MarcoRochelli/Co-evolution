@@ -49,15 +49,6 @@
             <version>1.2.1</version>
         </dependency>
 
-        <!--
-        <dependency>
-            <groupId>it.units.erallab</groupId>
-            <artifactId>VSREvolution</artifactId>
-            <version>0.1.2</version>
-            <scope>system</scope>
-            <systemPath>C:\Users\marco\.m2\repository\it\units\erallab\TwoDimHighlyModularSoftRobots\1.2.7</systemPath>
-        </dependency>
-         -->
     </dependencies>
 
     <build>
