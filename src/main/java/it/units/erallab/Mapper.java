@@ -34,7 +34,7 @@ public class Mapper {
         //Settings settings = new Settings();
         //settings.setStepFrequency(1d / 30d);
         Random random = new Random();
-        double threshold = 1d;
+        double threshold = 0d;
 
         // trasformare l'array in una grid
         int c = 0;

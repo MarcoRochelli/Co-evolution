@@ -24,7 +24,7 @@ public class DistributedMapper implements Function<List<Double>, Robot<SensingVo
         this.signals = signals;
     }
 
-    // duplicate sensors with
+    // duplicate sensors with serialization utils
     @Override
     public Robot<SensingVoxel> apply(List<Double> doubles) {
         int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum();
