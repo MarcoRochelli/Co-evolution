@@ -58,7 +58,7 @@ public class MainCoEvo extends Worker {
 
 
   @Override
-  public void run() {
+  public void run() {  // working basic version
     Random random = new Random();
     // settings for the simulation
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
