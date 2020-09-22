@@ -62,7 +62,7 @@ public class MainCoEvo extends Worker {
     Random random = new Random();
     // settings for the simulation
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "500"));           // total number of robots simulated
+    int nBirths = i(a("nBirths", "2000"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));             // number of runs
     // sensors the voxel should have
     List<Sensor> sensors = List.of(  // list of sensors to use
@@ -70,7 +70,7 @@ public class MainCoEvo extends Worker {
         new Normalization(new AreaRatio())
     );
     // inner neurons
-    int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
+    int[] innerNeurons = new int[0]; // array that sets number of inner neuron foe each layer
     List<String> terrainNames = l(a("terrain", "flat"));   //flat
     Locomotion.Metric fitnessMetric = Locomotion.Metric.valueOf(a("fitnessMetric", Locomotion.Metric.TRAVEL_X_RELATIVE_VELOCITY.name().toLowerCase()).toUpperCase());
     List<Locomotion.Metric> allMetrics = l(a("metrics", List.of(Locomotion.Metric.values()).stream().map(m -> m.name().toLowerCase()).collect(Collectors.joining(",")))).stream()
@@ -85,19 +85,24 @@ public class MainCoEvo extends Worker {
 
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
-        a("dir", ".")),  // where to save should i change this? i didn't have to in old code
+       /* a("dir", ".")),  // where to save should i change this? i didn't have to in old code
         a("fileStats", null)              // how to name it
+
+        */
+        a("dir", "C:\\Users\\marco\\Desktop")),
+        a("fileStats", "stats.txt")
     );
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
-        a("dir", ".")),
-        a("fileSerialized",null )
+        /*a("dir", ".")),
+        a("fileSerialized",null)
+
+         */
+        a("dir", "C:\\Users\\marco\\Desktop")),
+        a("fileSerialized", "serialized.txt")
     );
 
-
     //shows params on log
-
     L.info("Terrains: " + terrainNames);
-
 
     //start iterations
     for (int seed : seeds) {
@@ -105,7 +110,6 @@ public class MainCoEvo extends Worker {
         Map<String, String> keys = new TreeMap<>(Map.of(
             "seed", Integer.toString(seed),
             "terrain", terrainName
-
         ));
 
         //problem to solve
@@ -135,12 +139,9 @@ public class MainCoEvo extends Worker {
               PartialComparator.from(Double.class).comparing(Individual::getFitness),
               -1,
               1
-
           );
 
-
           //build main data collectors for listener
-
           List<DataCollector<?, ? super Robot<?>, ? super Double>> collectors = new ArrayList<DataCollector<?, ? super Robot<?>, ? super Double>>(List.of(
               new Static(keys),
               new Basic(),
@@ -197,7 +198,6 @@ public class MainCoEvo extends Worker {
 
     }
   }
-
 
   private static Function<Robot<?>, List<Item>> metrics(List<Locomotion.Metric> metrics, String prefix, Function<Robot<?>, List<Double>> task, String format) {
     return individual -> {
