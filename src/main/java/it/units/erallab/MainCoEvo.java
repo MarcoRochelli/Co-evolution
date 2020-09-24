@@ -62,8 +62,9 @@ public class MainCoEvo extends Worker {
     Random random = new Random();
     // settings for the simulation
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "2000"));           // total number of births not robots
+    int nBirths = i(a("nBirths", "500"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));             // number of runs
+    List<String> controllers = l(a("controller", "heterogeneous"));  // can be homogenous or heterogeneous
     // sensors the voxel should have
     List<Sensor> sensors = List.of(  // list of sensors to use
         new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
@@ -85,20 +86,24 @@ public class MainCoEvo extends Worker {
 
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
-       /* a("dir", ".")),  // where to save should i change this? i didn't have to in old code
+        a("dir", ".")),  // where to save should i change this? i didn't have to in old code
         a("fileStats", null)              // how to name it
 
-        */
+        /* // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileStats", "stats.txt")
-    );
-    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
-        /*a("dir", ".")),
-        a("fileSerialized",null)
 
          */
+    );
+    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
+        a("dir", ".")),
+        a("fileSerialized", null)
+
+        /* // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileSerialized", "serialized.txt")
+
+         */
     );
 
     //shows params on log
@@ -107,99 +112,109 @@ public class MainCoEvo extends Worker {
     //start iterations
     for (int seed : seeds) {
       for (String terrainName : terrainNames) {
-        Map<String, String> keys = new TreeMap<>(Map.of(
-            "seed", Integer.toString(seed),
-            "terrain", terrainName
-        ));
-
-        //problem to solve
-        Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
-            new Locomotion(
-                episodeTime,
-                Locomotion.createTerrain(terrainName),
-                allMetrics,
-                physicsSettings
-            ), CACHE_SIZE);
-
-
-        // cretes mapper, factory, genotype and robot
-        DistributedMapper mapper = new DistributedMapper(5, 5, sensors, innerNeurons, 1);
-        UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-        FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
-
-        // robot should evolve
-        try {
-          Stopwatch stopwatch = Stopwatch.createStarted();
-          L.info(String.format("Starting %s", keys));
-
-          // CREATES THE EVOLVER
-          Evolver<List<Double>, Robot<?>, Double> evolver = new CMAESEvolver<>(
-              mapper,
-              factory,
-              PartialComparator.from(Double.class).comparing(Individual::getFitness),
-              -1,
-              1
-          );
-
-          //build main data collectors for listener
-          List<DataCollector<?, ? super Robot<?>, ? super Double>> collectors = new ArrayList<DataCollector<?, ? super Robot<?>, ? super Double>>(List.of(
-              new Static(keys),
-              new Basic(),
-              new Population(),
-              new Diversity(),
-              new BestInfo("%5.2f"),
-              new FunctionOfOneBest<>( // i do not understand this
-                  ((Function<Individual<?, ? extends Robot<?>, ? extends Double>, Robot<?>>) Individual::getSolution)
-                      .andThen(SerializationUtils::clone)
-                      .andThen(metrics(allMetrics, "training", trainingTask, "%6.2f"))
-              )
+        for (String controller : controllers) {
+          Map<String, String> keys = new TreeMap<>(Map.of(
+              "seed", Integer.toString(seed),
+              "terrain", terrainName,
+              "controller", controller
           ));
-          Listener<? super Object, ? super Robot<?>, ? super Double> listener;
-          if (statsListenerFactory.getBaseFileName() == null) {
-            listener = listener(collectors.toArray(DataCollector[]::new));
+
+          //problem to solve
+          Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
+              new Locomotion(
+                  episodeTime,
+                  Locomotion.createTerrain(terrainName),
+                  allMetrics,
+                  physicsSettings
+              ), CACHE_SIZE);
+
+
+          // cretes mapper, factory, genotype and robot
+          // 5X5 NOW!!!!!!!!!!!!!!!!!!
+          DistributedMapper mapper = null;
+          if (controller.equals("homogeneous")) {
+            mapper = new DistributedMapper(false, 5, 5, sensors, innerNeurons, 1);
           } else {
-            listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
+            mapper = new DistributedMapper(true, 5, 5, sensors, innerNeurons, 1);
           }
-          if (serializedListenerFactory.getBaseFileName() != null) {
-            listener = serializedListenerFactory.build(
+
+          UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+          FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
+
+          // robot should evolve
+          try {
+            Stopwatch stopwatch = Stopwatch.createStarted();
+            L.info(String.format("Starting %s", keys));
+
+            // CREATES THE EVOLVER
+            Evolver<List<Double>, Robot<?>, Double> evolver = new CMAESEvolver<>(
+                mapper,
+                factory,
+                PartialComparator.from(Double.class).reversed().comparing(Individual::getFitness), // reversed is ABSOLUTELY NECESSARY i was minimizing instead of maximizing
+                -1,
+                1
+            );
+
+            //build main data collectors for listener
+            List<DataCollector<?, ? super Robot<?>, ? super Double>> collectors = new ArrayList<DataCollector<?, ? super Robot<?>, ? super Double>>(List.of(
                 new Static(keys),
                 new Basic(),
-                new FunctionOfOneBest<>(i -> List.of(
-                    new Item("fitness.value", i.getFitness(), "%7.5f"),
-                    new Item("serialized.robot", Utils.safelySerialize(i.getSolution()), "%s"),
-                    new Item("serialized.genotype", Utils.safelySerialize((Serializable) i.getGenotype()), "%s")
-                ))
-            ).then(listener);
-          }
-          Collection<Robot<?>> solutions = evolver.solve( // here uses evolver to solve the problem
-              trainingTask.andThen(values -> values.get(allMetrics.indexOf(fitnessMetric))),
-              new Births(nBirths),
-              new Random(seed),
-              executorService,
-              Listener.onExecutor(
-                  listener,
-                  executorService
-              )
-          );
-          L.info(String.format("Done %s: %d solutions in %4ds",
-              keys,
-              solutions.size(),
-              stopwatch.elapsed(TimeUnit.SECONDS)
-          ));
+                new Population(),
+                new Diversity(),
+                new BestInfo("%5.2f"),
+                new FunctionOfOneBest<>( // i do not understand this
+                    ((Function<Individual<?, ? extends Robot<?>, ? extends Double>, Robot<?>>) Individual::getSolution)
+                        .andThen(SerializationUtils::clone)
+                        .andThen(metrics(allMetrics, "training", trainingTask, "%6.2f"))
+                )
+            ));
+            Listener<? super Object, ? super Robot<?>, ? super Double> listener;
+            if (statsListenerFactory.getBaseFileName() == null) {
+              listener = listener(collectors.toArray(DataCollector[]::new));
+            } else {
+              listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
+            }
+            if (serializedListenerFactory.getBaseFileName() != null) {
+              listener = serializedListenerFactory.build(
+                  new Static(keys),
+                  new Basic(),
+                  new FunctionOfOneBest<>(i -> List.of(
+                      new Item("fitness.value", i.getFitness(), "%7.5f"),
+                      new Item("serialized.robot", Utils.safelySerialize(i.getSolution()), "%s"),
+                      new Item("serialized.genotype", Utils.safelySerialize((Serializable) i.getGenotype()), "%s")
+                  ))
+              ).then(listener);
+            }
+            Collection<Robot<?>> solutions = evolver.solve( // here uses evolver to solve the problem
+                trainingTask.andThen(values -> values.get(allMetrics.indexOf(fitnessMetric))),
+                new Births(nBirths),
+                new Random(seed),
+                executorService,
+                Listener.onExecutor(
+                    listener,
+                    executorService
+                )
+            );
+            L.info(String.format("Done %s: %d solutions in %4ds",
+                keys,
+                solutions.size(),
+                stopwatch.elapsed(TimeUnit.SECONDS)
+            ));
 
-        } catch (InterruptedException | ExecutionException e) {
-          L.severe(String.format("Cannot complete %s due to %s",
-              keys,
-              e
-          ));
-          e.printStackTrace();
+          } catch (InterruptedException | ExecutionException e) {
+            L.severe(String.format("Cannot complete %s due to %s",
+                keys,
+                e
+            ));
+            e.printStackTrace();
+          }
         }
       }
-
     }
   }
 
-  private static Function<Robot<?>, List<Item>> metrics(List<Locomotion.Metric> metrics, String prefix, Function<Robot<?>, List<Double>> task, String format) {
+  private static Function<Robot<?>, List<Item>> metrics(List<Locomotion.Metric> metrics, String
+      prefix, Function<Robot<?>, List<Double>> task, String format) {
     return individual -> {
       List<Double> values = task.apply(individual);
       List<Item> items = new ArrayList<>(metrics.size());

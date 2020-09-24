@@ -29,19 +29,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
 
-public class DistributedMapper implements Function<List<Double>, Robot<?>> {
+// omogeneous o heterogeneous??????? mettere un booleano nel costruttore che lo indica (ora è omogeneous)
+public class OldDistributedMapper implements Function<List<Double>, Robot<?>> {
 
-  private final boolean heterogeneous;
+  //private final boolean hetergeneous;
+
   private final int width;
   private final int height;
-
   private final List<Sensor> sensors;
   private final int[] innerNeurons;
   private final int signals;
   private final static double THRESHOLD = 0d;
 
-  public DistributedMapper(boolean heterogeneous, int width, int height, List<Sensor> sensors, int[] innerNeurons, int signals) {
-    this.heterogeneous = heterogeneous;
+  //public DistributedMapper(boolean heterogeneous, int width, int height, List<Sensor> sensors, int[] innerNeurons, int signals) {
+  public OldDistributedMapper(int width, int height, List<Sensor> sensors, int[] innerNeurons, int signals) {
+    //this.hetergeneous = heterogeneous;
     this.width = width;
     this.height = height;
     this.sensors = sensors;
@@ -53,12 +55,13 @@ public class DistributedMapper implements Function<List<Double>, Robot<?>> {
     int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum();
     int nOfOutputs = signals * 4 + 1;
     int nOfWeights = MultiLayerPerceptron.countWeights(MultiLayerPerceptron.countNeurons(nOfInputs, innerNeurons, nOfOutputs));
-
-    if (heterogeneous) {
+    /*
+    if (hetergeneous == true) {
       return width * height + nOfWeights * width * height;
     } else
 
-      return width * height + nOfWeights;
+     */
+    return width * height + nOfWeights;
   }
 
   @Override
@@ -112,36 +115,29 @@ public class DistributedMapper implements Function<List<Double>, Robot<?>> {
           nOfOutputs
       );
 
-      // creates an array of doubles from the list of the genotype
       List<Double> w = genotype.subList(width * height, genotype.size());
       double[] weights = new double[w.size()];
       for (int i = 0; i < weights.length; i++) {
         weights[i] = w.get(i);
       }
 
-      if (heterogeneous) {
+      /*
+      if (hetergeneous == true) {
         int from = entry.getX() * nOfVoxelWeights + entry.getY() * width * nOfVoxelWeights; //  + width * height is not needed beacause i remove it before
         int to = from + nOfVoxelWeights;
-        double[] voxelWeights = Arrays.copyOfRange(weights, from, to);
-        /*
-        System.out.println("parto da: " + from);
-        System.out.println("fino a: " + to);
-        for (int i = 0; i < voxelWeights.length; i++) {
-          System.out.println("voxelWeights:[" + i + "] " + voxelWeights[i]);
-        }
-
-         */
+        double [] voxelWeights =  Arrays.copyOfRange(weights, from, to);
         mlp.setParams(voxelWeights);
-      } else {
-        // i have to assign the correct subset of weights to this
-        mlp.setParams(weights);
-      }
+      } else
+
+       */
+      // i have to assigni the correct subset of weights to this
+      mlp.setParams(weights);
       distributedSensing.getFunctions().set(entry.getX(), entry.getY(), mlp);
     }
 
     return new Robot<>(
         distributedSensing,
-        body //SerializationUtils.clone(body) i think it is better not to copy this
+        body //SerializationUtils.clone(body)
     );
   }
 
@@ -164,6 +160,7 @@ public class DistributedMapper implements Function<List<Double>, Robot<?>> {
         new Settings()
     );
 
+
     List<Sensor> sensors = List.of(  // list of sensors to use
         new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
         new Normalization(new AreaRatio())
@@ -173,9 +170,10 @@ public class DistributedMapper implements Function<List<Double>, Robot<?>> {
       innerNeurons[i] = random.nextInt();
     }
 
-    DistributedMapper mapper = new DistributedMapper(true, 10, 10, sensors, innerNeurons, 1);
+    //DistributedMapper mapper = new DistributedMapper(false,10, 10, sensors, innerNeurons, 1);
+    OldDistributedMapper mapper = new OldDistributedMapper(10, 10, sensors, innerNeurons, 1);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-    System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
+    // int length = mapper.getGenotypeSize();  // it values 46
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
     List<Double> genotype = factory.build(random);
     Robot<?> robot = mapper.apply(genotype);
