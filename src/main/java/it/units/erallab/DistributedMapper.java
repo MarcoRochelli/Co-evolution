@@ -101,6 +101,15 @@ public class DistributedMapper implements Function<List<Double>, Robot<?>> {
       }
     }
 
+    // to know number of effective voxel of the robot
+    int nOfVoxels = 0;
+    for (Grid.Entry<SensingVoxel> entry : body) {
+      if (entry.getValue() != null) {
+        nOfVoxels++;
+      }
+    }
+    System.out.println("dimensione del robot: "+ nOfVoxels);
+
 
     // creates a distributed controller
     DistributedSensing distributedSensing = new DistributedSensing(body, signals);
