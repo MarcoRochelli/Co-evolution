@@ -1,37 +1,26 @@
 package it.units.erallab;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.Lists;
-import it.units.erallab.hmsrobots.core.controllers.MultiLayerPerceptron;
 import it.units.erallab.hmsrobots.core.objects.Robot;
 import it.units.erallab.hmsrobots.core.objects.SensingVoxel;
 import it.units.erallab.hmsrobots.core.sensors.*;
 import it.units.erallab.hmsrobots.tasks.Locomotion;
+import it.units.erallab.hmsrobots.util.Grid;
 import it.units.malelab.jgea.Worker;
 import it.units.malelab.jgea.core.Individual;
 import it.units.malelab.jgea.core.evolver.CMAESEvolver;
 import it.units.malelab.jgea.core.evolver.Evolver;
-import it.units.malelab.jgea.core.evolver.StandardEvolver;
 import it.units.malelab.jgea.core.evolver.stopcondition.Births;
 import it.units.malelab.jgea.core.listener.Listener;
 import it.units.malelab.jgea.core.listener.MultiFileListenerFactory;
 import it.units.malelab.jgea.core.listener.collector.*;
 import it.units.malelab.jgea.core.order.PartialComparator;
-import it.units.malelab.jgea.core.selector.Tournament;
-import it.units.malelab.jgea.core.selector.Worst;
 import it.units.malelab.jgea.core.util.Misc;
 import it.units.malelab.jgea.representation.sequence.FixedLengthListFactory;
-import it.units.malelab.jgea.representation.sequence.numeric.GaussianMutation;
-import it.units.malelab.jgea.representation.sequence.numeric.GeometricCrossover;
 import it.units.malelab.jgea.representation.sequence.numeric.UniformDoubleFactory;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.lang3.SerializationUtils;
 import org.dyn4j.dynamics.Settings;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -53,19 +42,19 @@ public class MainCoEvo extends Worker {
     new MainCoEvo(args);
   }
 
-
   @Override
-  public void run() {  // working basic version
+  public void run() {
     Random random = new Random();
     // settings for the simulation
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "50"));           // total number of births not robots
+    int nBirths = i(a("nBirths", "10"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));             // number of runs
 
     // THINGS I ADDED
-    List<String> sizes = l(a("size", "5x5"));
-    List<String> controllers = l(a("controller", "homogeneous"));  // can be homogenous or heterogeneous
-    List<String> sensorsConfig = l(a("sensors", "vel+area"));
+
+    List<String> sizes = l(a("sizes", "5x5")); //,10x10
+    List<String> controllers = l(a("controllers", "homogeneous"));  // can be homogenous or heterogeneous ,heterogeneous
+    List<String> sensorsConfig = l(a("sensorsConfig", "vel+area")); //,vel+area+touch
 
 
     // inner neurons
@@ -88,12 +77,10 @@ public class MainCoEvo extends Worker {
         a("dir", ".")),  // where to save should i change this? i didn't have to in old code
         a("fileStats", null)              // how to name it
 
-
          */
         // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileStats", "stats.txt")
-
 
     );
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
@@ -106,7 +93,6 @@ public class MainCoEvo extends Worker {
         // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileSerialized", "serialized.txt")
-
 
     );
     //shows params on log
@@ -125,8 +111,8 @@ public class MainCoEvo extends Worker {
                   "seed", Integer.toString(seed),
                   "terrain", terrainName,
                   "controller", controller,
-                  "size",size,
-                  "sensorConfig",sensorConfig
+                  "size", size,
+                  "sensorConfig", sensorConfig
               ));
               //problem to solve
               Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
@@ -145,6 +131,8 @@ public class MainCoEvo extends Worker {
               } else if (size.equals("10x10")) {
                 width = 10;
                 height = 10;
+              } else {
+                System.out.println("incorrect size string");
               }
 
               List<Sensor> sensors = null;  // list of sensors to use
@@ -158,18 +146,22 @@ public class MainCoEvo extends Worker {
                 sensors = List.of(
                     new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
                     new Normalization(new AreaRatio()),
-                    new Touch() // is it ok like this?
+                    new Normalization(new Average(new Touch(), 0.5)) // Eric said that it is better to add average with 0.5
                 );
+              } else {
+                System.out.println("incorrect sensor string");
               }
               Boolean control = true;
               if (controller.equals("homogeneous")) {
                 control = false;
               } else if (controller.equals("heterogeneous")) {
                 control = true;
+              } else {
+                System.out.println("incorrect controller string");
               }
 
-
-              DistributedMapper mapper = new DistributedMapper(control, width, height, sensors, innerNeurons, 1);
+              // creates mapper,factory and robot
+              DoubleMapper mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, 1);
               UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
               FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
 
@@ -194,11 +186,19 @@ public class MainCoEvo extends Worker {
                     new Population(),
                     new Diversity(),
                     new BestInfo("%5.2f"),
-                    new SizeCollector(), // saves robot size
+                    // if deleted file stats does not have last 10 columns
                     new FunctionOfOneBest<>(
                         ((Function<Individual<?, ? extends Robot<?>, ? extends Double>, Robot<?>>) Individual::getSolution)
                             .andThen(SerializationUtils::clone)
                             .andThen(metrics(allMetrics, "training", trainingTask, "%6.2f"))
+                    ),
+                    // save number of effective voxel of the robot and effective height and effective width
+                    new FunctionOfOneBest<>(
+                        individual -> List.of(
+                            new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"),
+                            new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
+                            new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d")
+                        )
                     )
                 ));
                 Listener<? super Object, ? super Robot<?>, ? super Double> listener;
@@ -246,6 +246,7 @@ public class MainCoEvo extends Worker {
         }
       }
     }
+
   }
 
   private static Function<Robot<?>, List<Item>> metrics(List<Locomotion.Metric> metrics, String
