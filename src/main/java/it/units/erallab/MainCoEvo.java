@@ -160,10 +160,17 @@ public class MainCoEvo extends Worker {
                 System.out.println("incorrect controller string");
               }
 
-              // creates mapper,factory and robot
+              // creates mapper and factory BIT REPRESENTATION
+              /*
               DoubleMapper mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, 1);
               UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
               FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
+               */
+
+              // creates mapper and factory GAUSSIAN REPRESENTATION
+              GaussianMapper mapper = new GaussianMapper(control, 5, width, height, sensors, innerNeurons, 1);
+              GaussianFactory<Double> factory = new GaussianFactory<>(mapper.getGenotypeSize(),5);
+
 
               // to evolve the robot
               try {
@@ -246,7 +253,6 @@ public class MainCoEvo extends Worker {
         }
       }
     }
-
   }
 
   private static Function<Robot<?>, List<Item>> metrics(List<Locomotion.Metric> metrics, String
