@@ -14,6 +14,8 @@ import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Utils;
 import it.units.erallab.hmsrobots.viewers.GridEpisodeRunner;
 import it.units.erallab.hmsrobots.viewers.GridOnlineViewer;
+import it.units.malelab.jgea.representation.sequence.FixedLengthListFactory;
+import it.units.malelab.jgea.representation.sequence.numeric.UniformDoubleFactory;
 import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.dyn4j.dynamics.Settings;
@@ -26,101 +28,88 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-import static java.lang.Math.*;
+// here changes the number of inputs and consequently weights of the neural network
+public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
-public class GaussianMapper implements Function<List<Double>, Robot<?>> {
 
   private final boolean heterogeneous;
-  private final int nOfGaussians;
   private final int width;
   private final int height;
 
   private final List<Sensor> sensors;
+  private final boolean hasPositionSensor;
   private final int[] innerNeurons;
   private final int signals;
+
   private final static double THRESHOLD = 0d;
 
-  public GaussianMapper(boolean heterogeneous, int nOfGaussians, int width, int height, List<Sensor> sensors, int[] innerNeurons, int signals) {
+  public DoublePositionMapper(boolean heterogeneous, int width, int height, List<Sensor> sensors, boolean hasPositionSensor, int[] innerNeurons, int signals) {
     this.heterogeneous = heterogeneous;
-    this.nOfGaussians = nOfGaussians;
     this.width = width;
     this.height = height;
     this.sensors = sensors;
+    this.hasPositionSensor = hasPositionSensor;
     this.innerNeurons = innerNeurons;
     this.signals = signals;
   }
 
   public int getGenotypeSize() {  // returns expected length of the genotype
-    int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum();
+    int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum() + (hasPositionSensor ? 2 : 0); // +2 are inputs of position
     int nOfOutputs = signals * 4 + 1;
     int nOfWeights = MultiLayerPerceptron.countWeights(MultiLayerPerceptron.countNeurons(nOfInputs, innerNeurons, nOfOutputs));
-    int nOfBodyParams = 5 * nOfGaussians;
+    System.out.println("numero pesi: " + nOfWeights);
     if (heterogeneous) {
-      return nOfBodyParams + nOfWeights * width * height;
+      return width * height + nOfWeights * width * height;
     } else
-      return nOfBodyParams + nOfWeights;
+      return width * height + nOfWeights;
   }
 
   @Override
-  public Robot<?> apply(List<Double> genotype) {
-    int nOfBodyParams = 5 * nOfGaussians;
-    int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum();
+  public Robot<?> apply(List<Double> genotype) { //  is the genotype
+
+    int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum()  + (hasPositionSensor ? 2 : 0);
     int nOfOutputs = signals * 4 + 1;
     int nOfVoxelWeights = MultiLayerPerceptron.countWeights(MultiLayerPerceptron.countNeurons(nOfInputs, innerNeurons, nOfOutputs));
-    System.out.println("nOfVoxelWeights: " + nOfVoxelWeights);
-    if (genotype.size() != getGenotypeSize()) {
+    if (genotype.size() != getGenotypeSize()) { // correct length of the genotype
       throw new IllegalArgumentException("Sensor list has wrong dimension");
     }
 
     SensingVoxel sensingVoxel = new SensingVoxel(sensors);
 
-    // CREATES A GRID THAT IS SUM OF THE GAUSSIANS
-    Grid<Double> values = Grid.create(width, height);
-    for (Grid.Entry<Double> entry : values) {
-      double value = 0;
-      for (int i = 0; i < nOfGaussians; i++) {
-        double weight = genotype.get(5 * i);
-        double Ux = genotype.get(1 + 5 * i);
-        double Uy = genotype.get(2 + 5 * i);
-        double Ox = genotype.get(3 + 5 * i);
-        double Oy = genotype.get(4 + 5 * i);
-
-        // OK NORMALIZZATO COSì????????????????
-        int x = entry.getX() / width;
-        int y = entry.getY() / height;
-         /*
-        int x = entry.getX();
-        int y = entry.getY();
-         */
-        //value += weight * (exp(-0.5 * (pow((x - Ux), 2.0) / pow(Ox, 2.0) + pow((y - Uy), 2.0) / pow(Oy, 2.0))) / (2 * PI * Ox * Oy));
-        value += weight * (exp(-0.5 * (pow((x - Ux) / Ox, 2.0) + pow((y - Uy) / Oy, 2.0))) / (2 * PI * Ox * Oy)); // same as above i just simplified exponentials
-
-        /*
-        System.out.println("coordinate: " + entry.getX() + ","+ entry.getY());
-        System.out.println("i: " + i);
-        System.out.println("weight: " + weight);
-        System.out.println("Ux: " + Ux);
-        System.out.println("Uy: " + Uy);
-        System.out.println("Ox: " + Ox);
-        System.out.println("Oy: " + Oy);
-        System.out.println("value: " + value);
-
-         */
-      }
-      values.set(entry.getX(), entry.getY(), value);
-    }
-
-
-    Grid<SensingVoxel> body = Grid.create(width, height);
-    // for each value of values if it is bigger tha a threshold puts a voxel in that position
-    for (Grid.Entry<Double> entry : values) {
-      if (entry.getValue() > THRESHOLD) {
-        body.set(entry.getX(), entry.getY(), SerializationUtils.clone(sensingVoxel));
-      } else {
-        body.set(entry.getX(), entry.getY(), null);
+    int c = 0;
+    Grid<Boolean> shape = Grid.create(width, height);
+    for (double entry : genotype) {
+      if (c < width * height) {  // < or <= ? < is correct
+        if (entry > THRESHOLD) {
+          shape.set(c % width, c / width, true);
+        } else {
+          shape.set(c % width, c / width, false);
+        }
+        c = c + 1;
       }
     }
+    if (shape.values().stream().noneMatch(b -> b)) {
+      shape = Grid.create(1, 1, true);
+    }
+    // link this with the grid of sensing voxels
+
+
+    Grid<SensingVoxel> body = Grid.create(width, height,
+        (x, y) -> new SensingVoxel(
+            Stream.concat(
+                sensors.stream().map(SerializationUtils::clone),
+                List.of(
+                    new Constant(
+                        new double[]{(double)x / (double)width, (double)y / (double)height},
+                        new Sensor.Domain[]{Sensor.Domain.of(0, 1), Sensor.Domain.of(0, 1)}
+                    )
+                ).stream()
+            ).collect(Collectors.toList())
+        )
+    );
 
     // creates an empty grid
     Grid<SensingVoxel> emptyBody = Grid.create(body.getW(), body.getH(), (x, y) -> null);
@@ -148,20 +137,20 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
       );
 
       // creates an array of doubles from the list of the genotype
-      List<Double> w = genotype.subList(nOfBodyParams, genotype.size());
+      List<Double> w = genotype.subList(width * height, genotype.size());
       double[] weights = new double[w.size()];
       for (int i = 0; i < weights.length; i++) {
         weights[i] = w.get(i);
       }
 
       if (heterogeneous) {
-        int from = entry.getX() * nOfVoxelWeights + entry.getY() * width * nOfVoxelWeights; //  + width * height is not needed because i remove it before
+        int from = entry.getX() * nOfVoxelWeights + entry.getY() * width * nOfVoxelWeights; //  + width * height is not needed because i removed it before
         int to = from + nOfVoxelWeights;
         double[] voxelWeights = Arrays.copyOfRange(weights, from, to);
-        /*
+
         System.out.println("parto da: " + from);
         System.out.println("fino a: " + to);
-         */
+
         mlp.setParams(voxelWeights);
       } else {
         // i have to assign the correct subset of weights to this
@@ -192,14 +181,14 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
         new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
         new Normalization(new AreaRatio())
     );
+
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
 
-    GaussianMapper mapper = new GaussianMapper(true, 5, 10, 10, sensors, innerNeurons, 1);
-    //System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
-
-    GaussianFactory<Double> factory = new GaussianFactory<>(mapper.getGenotypeSize(), 5);
+    DoublePositionMapper mapper = new DoublePositionMapper(false, 10, 10, sensors,true, innerNeurons, 1);
+    UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+    System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
+    FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
     List<Double> genotype = factory.build(random);
-
     Robot<?> robot = mapper.apply(genotype);
 
 

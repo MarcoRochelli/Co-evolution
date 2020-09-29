@@ -135,7 +135,7 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
       }
 
       if (heterogeneous) {
-        int from = entry.getX() * nOfVoxelWeights + entry.getY() * width * nOfVoxelWeights; //  + width * height is not needed beacause i remove it before
+        int from = entry.getX() * nOfVoxelWeights + entry.getY() * width * nOfVoxelWeights; //  + width * height is not needed because i remove it before
         int to = from + nOfVoxelWeights;
         double[] voxelWeights = Arrays.copyOfRange(weights, from, to);
         /*
