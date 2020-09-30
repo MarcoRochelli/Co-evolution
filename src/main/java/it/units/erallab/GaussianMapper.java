@@ -68,7 +68,6 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
     int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum();
     int nOfOutputs = signals * 4 + 1;
     int nOfVoxelWeights = MultiLayerPerceptron.countWeights(MultiLayerPerceptron.countNeurons(nOfInputs, innerNeurons, nOfOutputs));
-    System.out.println("nOfVoxelWeights: " + nOfVoxelWeights);
     if (genotype.size() != getGenotypeSize()) {
       throw new IllegalArgumentException("Sensor list has wrong dimension");
     }
@@ -86,10 +85,10 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
         double Ox = genotype.get(3 + 5 * i);
         double Oy = genotype.get(4 + 5 * i);
 
-        // OK NORMALIZZATO COSì????????????????
+        // normalization
         int x = entry.getX() / width;
         int y = entry.getY() / height;
-         /*
+         /* // with normalization i get almost always robots with one or all voxels
         int x = entry.getX();
         int y = entry.getY();
          */
@@ -105,7 +104,6 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
         System.out.println("Ox: " + Ox);
         System.out.println("Oy: " + Oy);
         System.out.println("value: " + value);
-
          */
       }
       values.set(entry.getX(), entry.getY(), value);
