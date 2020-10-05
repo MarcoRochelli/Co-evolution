@@ -2,11 +2,10 @@ package it.units.erallab;
 
 import com.google.common.base.Stopwatch;
 import it.units.erallab.hmsrobots.core.objects.Robot;
-import it.units.erallab.hmsrobots.core.objects.SensingVoxel;
 import it.units.erallab.hmsrobots.core.sensors.*;
 import it.units.erallab.hmsrobots.tasks.Locomotion;
-import it.units.erallab.hmsrobots.util.Grid;
 import it.units.malelab.jgea.Worker;
+import it.units.malelab.jgea.core.IndependentFactory;
 import it.units.malelab.jgea.core.Individual;
 import it.units.malelab.jgea.core.evolver.CMAESEvolver;
 import it.units.malelab.jgea.core.evolver.Evolver;
@@ -23,7 +22,6 @@ import org.dyn4j.dynamics.Settings;
 
 import java.io.Serializable;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -46,14 +44,14 @@ public class MainCoEvo extends Worker {
   public void run() {
     // settings for the simulation
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "1000"));           // total number of births not robots
-    int[] seeds = ri(a("seed", "0:1"));             // number of runs
+    int nBirths = i(a("nBirths", "500"));         // total number of births not robots
+    int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
-    List<String> sizes = l(a("sizes", "5x5")); //,10x10
-    List<String> controllers = l(a("controllers", "homogeneous"));  // can be homogenous or heterogeneous ,heterogeneous
-    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area")); // vel-area or vel-area-touch
-    List<String> representations = l(a("representation", "bit"));   // bit or gaussian
+    List<String> sizes = l(a("sizes", "10x10,5x5")); //5x5 or 10x10
+    List<String> controllers = l(a("controllers", "heterogeneous,homogeneous"));  // homogenous or heterogeneous
+    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area-touch")); // vel-area or vel-area-touch
+    List<String> representations = l(a("representation", "bit"));   // bit or gaussian or position
 
 
     // inner neurons
@@ -98,8 +96,7 @@ public class MainCoEvo extends Worker {
     L.info("Controller: " + controllers);
     L.info("Size: " + sizes);
     L.info("SensorConfig: " + sensorsConfig);
-    L.info("Representations: " + representations);
-
+    L.info("Representation: " + representations);
 
     //start iterations
     for (int seed : seeds) {
@@ -113,7 +110,8 @@ public class MainCoEvo extends Worker {
                     "terrain", terrainName,
                     "controller", controller,
                     "size", size,
-                    "sensorConfig", sensorConfig
+                    "sensor.config", sensorConfig,
+                    "representation", representation
                 ));
                 //problem to solve
                 Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
@@ -124,8 +122,8 @@ public class MainCoEvo extends Worker {
                         physicsSettings
                     ), CACHE_SIZE);
 
-                int width = 0;
-                int height = 0;
+                int width;
+                int height;
                 if (size.equals("5x5")) {
                   width = 5;
                   height = 5;
@@ -136,7 +134,7 @@ public class MainCoEvo extends Worker {
                   throw new IllegalArgumentException("incorrect size string");
                 }
 
-                List<Sensor> sensors = null;  // list of sensors to use
+                List<Sensor> sensors;  // list of sensors to use
                 if (sensorConfig.equals("vel-area")) {
                   // sensors the voxel should have
                   sensors = List.of(
@@ -152,7 +150,7 @@ public class MainCoEvo extends Worker {
                 } else {
                   throw new IllegalArgumentException("incorrect sensor string");
                 }
-                boolean control = true;
+                boolean control;
                 if (controller.equals("homogeneous")) {
                   control = false;
                 } else if (controller.equals("heterogeneous")) {
@@ -161,18 +159,29 @@ public class MainCoEvo extends Worker {
                   throw new IllegalArgumentException("incorrect controller string");
                 }
 
-                if (representation.equals("bit")) {
-                  // creates mapper and factory BIT REPRESENTATION
-                  DoubleMapper mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, 1);
-                  UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                  FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
-                } else if (representation.equals("gaussian")){
-                  GaussianMapper mapper = new GaussianMapper(control, 5, width, height, sensors, innerNeurons, 1);
-                  GaussianFactory<Double> factory = new GaussianFactory<>(mapper.getGenotypeSize(),5);
-                } else {
-                  throw new IllegalArgumentException("representation can be only bit or gaussian");
+                // wow i used ereditariety to create mapper and factory!
+                Function<List<Double>, Robot<?>> mapper;
+                IndependentFactory<List<Double>> factory;
+                // creates mapper and factory GAUSSIAN REPRESENTATION
+                switch (representation) {
+                  case "bit" -> {
+                    // creates mapper and factory BIT REPRESENTATION
+                    mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, 1);
+                    UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+                    factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
+                  }
+                  case "gaussian" -> {
+                    mapper = new GaussianMapper(control, 5, width, height, sensors, innerNeurons, 1);
+                    factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), 5);
+                  }
+                  case "position" -> {
+                    // creates mapper and factory POSITION REPRESENTATION
+                    mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, 1);
+                    UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+                    factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
+                  }
+                  default -> throw new IllegalArgumentException("incorrect representation string");
                 }
-
 
                 // to evolve the robot
                 try {
@@ -204,11 +213,8 @@ public class MainCoEvo extends Worker {
                       // save number of effective voxel of the robot and effective height and effective width
                       new FunctionOfOneBest<>(
                           individual -> List.of(
-                              // i think filter or getVoxels are doing something wrong
-                              new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // does not work!
-                              new Item("robot.effective.size",
-                                  it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).stream().filter(Objects::nonNull).count(),
-                                  "%2d"),
+                              new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
+                              //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
                               new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
                               new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d")
                           )
@@ -231,7 +237,7 @@ public class MainCoEvo extends Worker {
                         ))
                     ).then(listener);
                   }
-                  Collection<Robot<?>> solutions = evolver.solve( // here uses evolver to solve the problem
+                  Collection<Robot<?>> solutions = evolver.solve( // here uses the evolver to solve the problem
                       trainingTask.andThen(values -> values.get(allMetrics.indexOf(fitnessMetric))),
                       new Births(nBirths),
                       new Random(seed),
@@ -247,7 +253,7 @@ public class MainCoEvo extends Worker {
                       stopwatch.elapsed(TimeUnit.SECONDS)
                   ));
 
-                } catch (InterruptedException | ExecutionException e) {
+                } catch (Throwable e) {
                   L.severe(String.format("Cannot complete %s due to %s",
                       keys,
                       e
