@@ -86,14 +86,11 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
         double Oy = genotype.get(4 + 5 * i);
 
         // normalization
-        int x = entry.getX();
-        int y = entry.getY();
+        double x = (double) entry.getX() / (double) width;
+        double y = (double) entry.getY() / (double) height;
 
-         /* // with normalization i get always robots with one or all voxels also after evolution
-         int x = entry.getX() / width;
-         int y = entry.getY() / height;
-         */
         value += weight * (exp(-0.5 * (pow((x - Ux), 2.0) / pow(Ox, 2.0) + pow((y - Uy), 2.0) / pow(Oy, 2.0))) / (2 * PI * Ox * Oy));
+
         //value += weight * (exp(-0.5 * (pow((x - Ux) / Ox, 2.0) + pow((y - Uy) / Oy, 2.0))) / (2 * PI * Ox * Oy)); // same as above i just simplified exponentials
 
         /*

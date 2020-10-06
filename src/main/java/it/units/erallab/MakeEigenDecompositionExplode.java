@@ -1,18 +1,15 @@
 package it.units.erallab;
 
-import it.units.malelab.jgea.core.evolver.CMAESEvolver;
 import org.apache.commons.math3.linear.EigenDecomposition;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealMatrixFormat;
 
-import java.text.DecimalFormat;
-import java.util.function.Supplier;
 import java.util.logging.Logger;
 
 public class MakeEigenDecompositionExplode {
 
-  private static final Logger L = Logger.getLogger(MakeEigenDecompositionExplode.class.getName());
+  private static final Logger L = Logger.getLogger(MakeEigenDecompositionExplode.class.getName());  // this is how to make a logger
 
   public static void main(String[] args) {
     int rows = 3;
