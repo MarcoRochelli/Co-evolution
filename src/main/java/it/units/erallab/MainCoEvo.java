@@ -44,14 +44,14 @@ public class MainCoEvo extends Worker {
   public void run() {
     // settings for the simulation
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "500"));         // total number of births not robots
+    int nBirths = i(a("nBirths", "50"));         // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
     List<String> sizes = l(a("sizes", "10x10,5x5")); //5x5 or 10x10
     List<String> controllers = l(a("controllers", "heterogeneous,homogeneous"));  // homogenous or heterogeneous
     List<String> sensorsConfig = l(a("sensorsConfig", "vel-area-touch")); // vel-area or vel-area-touch
-    List<String> representations = l(a("representation", "bit"));   // bit or gaussian or position
+    List<String> representations = l(a("representation", "gaussian"));   // bit or gaussian or position
 
 
     // inner neurons
