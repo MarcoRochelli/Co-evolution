@@ -17,9 +17,14 @@ import it.units.malelab.jgea.core.order.PartialComparator;
 import it.units.malelab.jgea.core.util.Misc;
 import it.units.malelab.jgea.representation.sequence.FixedLengthListFactory;
 import it.units.malelab.jgea.representation.sequence.numeric.UniformDoubleFactory;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.lang3.SerializationUtils;
 import org.dyn4j.dynamics.Settings;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -43,15 +48,20 @@ public class MainCoEvo extends Worker {
   @Override
   public void run() {
     // settings for the simulation
+    final int numberOfValidations = 10;
+    final int typeOfValidations = 3;
+    final int nOfGaussians = 5;
+    final int signals = 1;
+
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
     int nBirths = i(a("nBirths", "50"));         // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
-    List<String> sizes = l(a("sizes", "10x10,5x5")); //5x5 or 10x10
-    List<String> controllers = l(a("controllers", "heterogeneous,homogeneous"));  // homogenous or heterogeneous
-    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area-touch")); // vel-area or vel-area-touch
-    List<String> representations = l(a("representation", "gaussian"));   // bit or gaussian or position
+    List<String> sizes = l(a("sizes", "5x5,10x10")); //5x5 or 10x10
+    List<String> controllers = l(a("controllers", "homogeneous,heterogeneous"));  // homogenous or heterogeneous
+    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area,vel-area-touch")); // vel-area or vel-area-touch
+    List<String> representations = l(a("representation", "position,positionGaussian"));   // bit or gaussian or position or positionGaussian
 
 
     // inner neurons
@@ -67,7 +77,6 @@ public class MainCoEvo extends Worker {
     }
 
     Settings physicsSettings = new Settings();
-
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
         /*
@@ -91,6 +100,41 @@ public class MainCoEvo extends Worker {
         a("fileSerialized", "serialized.txt")
 
     );
+
+    /*
+    // NEW csv printer added to print validation results
+    List<String> validationTransformationNames = l(a("validationTransformations", "")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
+    List<String> validationTerrainNames = l(a("validationTerrains", "")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
+    if (!validationTerrainNames.isEmpty() && validationTransformationNames.isEmpty()) {
+      validationTransformationNames.add("identity");
+    }
+    if (validationTerrainNames.isEmpty() && !validationTransformationNames.isEmpty()) {
+      validationTerrainNames.add(terrainNames.get(0));
+    }
+
+    CSVPrinter validationPrinter;
+    List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
+    try {
+      if (a("validationFile", null) != null) {
+        validationPrinter = new CSVPrinter(new FileWriter(
+            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
+        ), CSVFormat.DEFAULT.withDelimiter(';'));
+      } else {
+        validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
+      }
+      List<String> headers = new ArrayList<>();
+      headers.addAll(validationKeyHeaders);
+      headers.addAll(List.of("validation.transformation", "validation.terrain"));
+      headers.addAll(allMetrics.stream().map(m -> m.toString().toLowerCase()).collect(Collectors.toList()));
+      validationPrinter.printRecord(headers);
+    } catch (IOException e) {
+      L.severe(String.format("Cannot create printer for validation results due to %s", e));
+      return;
+    }
+
+     */
+
+
     //shows params on log
     L.info("Terrains: " + terrainNames);
     L.info("Controller: " + controllers);
@@ -166,19 +210,23 @@ public class MainCoEvo extends Worker {
                 switch (representation) {
                   case "bit" -> {
                     // creates mapper and factory BIT REPRESENTATION
-                    mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, 1);
+                    mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, signals);
                     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
                     factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
                   }
                   case "gaussian" -> {
-                    mapper = new GaussianMapper(control, 5, width, height, sensors, innerNeurons, 1);
-                    factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), 5);
+                    mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, signals);
+                    factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), nOfGaussians);
                   }
                   case "position" -> {
                     // creates mapper and factory POSITION REPRESENTATION
-                    mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, 1);
+                    mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, signals);
                     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
                     factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
+                  }
+                  case "positionGaussian" -> {
+                    mapper = new GaussianPositionMapper(true, nOfGaussians, width, height, sensors, true, innerNeurons, signals);
+                    factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
                   }
                   default -> throw new IllegalArgumentException("incorrect representation string");
                 }
@@ -252,6 +300,42 @@ public class MainCoEvo extends Worker {
                       solutions.size(),
                       stopwatch.elapsed(TimeUnit.SECONDS)
                   ));
+
+/*
+                  // NEW PART ON VALIDATION
+                  //do validation
+                  for (int n = 0; n < numberOfValidations; n++) {
+                    for (int k = 0; k < typeOfValidations; k++) {
+                      //build validation task
+                      Function<Robot<?>, List<Double>> validationTask = new Locomotion(
+                          episodeTime,
+                          Locomotion.createTerrain("flat"),
+                          allMetrics,
+                          physicsSettings
+                      );
+                      validationTask = Utils.buildRobotTransformation("prova")
+                          .andThen(SerializationUtils::clone)
+                          .andThen(validationTask);
+                      List<Double> metrics = validationTask.apply(solutions.stream().findFirst().get());
+                      L.info(String.format(
+                          "Validation %s/%s of \"first\" best done",
+                          n,
+                          k
+                      ));
+                      try {
+                        List<Object> values = new ArrayList<>();
+                        values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
+                        values.addAll(List.of(numberOfValidations, typeOfValidations));
+                        //values.addAll(metrics);
+                        validationPrinter.printRecord(values);
+                        validationPrinter.flush();
+                      } catch (IOException e) {
+                        L.severe(String.format("Cannot save validation results due to %s", e));
+                      }
+                    }
+                  }
+
+ */
 
                 } catch (Throwable e) {
                   L.severe(String.format("Cannot complete %s due to %s",

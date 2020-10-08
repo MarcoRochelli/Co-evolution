@@ -161,7 +161,6 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
          */
         mlp.setParams(voxelWeights);
       } else {
-        // i have to assign the correct subset of weights to this
         mlp.setParams(weights);
       }
       distributedSensing.getFunctions().set(entry.getX(), entry.getY(), mlp);
@@ -169,7 +168,7 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
 
     return new Robot<>(
         distributedSensing,
-        body //SerializationUtils.clone(body) i think it is better not to copy this
+        body
     );
   }
 
