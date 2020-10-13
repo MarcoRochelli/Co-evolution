@@ -71,7 +71,11 @@ import java.util.stream.IntStream;
 
 import static it.units.malelab.jgea.core.util.Args.*;
 
-// mia versione
+/**
+ * @author eric
+ * @created 2020/08/18
+ * @project VSREvolution
+ */
 public class ControllerComparison extends Worker {
 
   public static final int CACHE_SIZE = 10000;
@@ -81,13 +85,22 @@ public class ControllerComparison extends Worker {
   }
 
   public static void main(String[] args) {
-    new Main(args);
+    new ControllerComparison(args);
+  }
+
+  private interface IODimMapper extends Function<Grid<? extends SensingVoxel>, Pair<Integer, Integer>> {
+  }
+
+  private interface RobotMapper extends Function<Grid<? extends SensingVoxel>, Function<Function<double[], double[]>, Robot<?>>> {
+  }
+
+  private interface EvolverMapper extends BiFunction<Pair<IODimMapper, RobotMapper>, Grid<? extends SensingVoxel>, Evolver<?, Robot<?>, Double>> {
   }
 
   @Override
   public void run() {
     double episodeTime = d(a("episodeT", "10.0"));
-    int nBirths = i(a("nBirths", "10"));
+    int nBirths = i(a("nBirths", "500"));
     int[] seeds = ri(a("seed", "0:1"));
     List<String> terrainNames = l(a("terrain", "flat"));
     List<String> evolverMapperNames = l(a("evolver", "mlp-0.65-cmaes"));
@@ -123,22 +136,20 @@ public class ControllerComparison extends Worker {
     }
     Settings physicsSettings = new Settings();
     //prepare file listeners
-    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
-            a("dir", "C:\\Users\\marco\\Desktop")),
-            a("fileStats", "stats.txt")
+    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>(
+        a("dir", "."),
+        a("statsFile", null)
     );
-
-    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
-            a("dir", "C:\\Users\\marco\\Desktop")),
-            a("fileSerialized", "serialized.txt")
+    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>(
+        a("dir", "."),
+        a("serializedFile", null)
     );
-
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
     try {
-      if (a("validationFile", "validation.txt") != null) {
+      if (a("validationFile", null) != null) {
         validationPrinter = new CSVPrinter(new FileWriter(
-            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
+            a("dir", ".") + File.separator + a("validationFile", null)
         ), CSVFormat.DEFAULT.withDelimiter(';'));
       } else {
         validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
@@ -292,15 +303,6 @@ public class ControllerComparison extends Worker {
     } catch (IOException e) {
       L.severe(String.format("Cannot close printer for validation results due to %s", e));
     }
-  }
-
-  private interface IODimMapper extends Function<Grid<? extends SensingVoxel>, Pair<Integer, Integer>> {
-  }
-
-  private interface RobotMapper extends Function<Grid<? extends SensingVoxel>, Function<Function<double[], double[]>, Robot<?>>> {
-  }
-
-  private interface EvolverMapper extends BiFunction<Pair<IODimMapper, RobotMapper>, Grid<? extends SensingVoxel>, Evolver<?, Robot<?>, Double>> {
   }
 
   private static Pair<IODimMapper, RobotMapper> buildRobotMapper(String name) {
