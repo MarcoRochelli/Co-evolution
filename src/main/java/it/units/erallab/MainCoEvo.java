@@ -51,7 +51,7 @@ public class MainCoEvo extends Worker {
 
   @Override
   public void run() {
-
+/*
     // settings for the simulation
     final int numberOfValidations = 10;
     final int sizeOfvalidation = 3;
@@ -84,10 +84,10 @@ public class MainCoEvo extends Worker {
     Settings physicsSettings = new Settings();
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
-        /*
-        a("dir", ".")),  // where to save should i change this? i didn't have to in old code
-        a("fileStats", null)              // how to name it
-         */
+
+        //a("dir", ".")),  // where to save should i change this? i didn't have to in old code
+        //a("fileStats", null)              // how to name it
+
 
         // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
@@ -95,10 +95,10 @@ public class MainCoEvo extends Worker {
 
     );
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
-        /*
-        a("dir", ".")),
-        a("fileSerialized", null)
-         */
+
+        //a("dir", ".")),
+        //a("fileSerialized", null)
+
 
         // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
@@ -255,11 +255,11 @@ public class MainCoEvo extends Worker {
                                 new Item("robot.cropped.shape",
                                     PrintBodies.toString(it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull), Objects::nonNull),
                                     "%s")
-                                /*  // not normalized body
+                                 // not normalized body
                                 new Item("robot.shape",
                                     PrintBodies.toString(individual.getSolution().getVoxels(), Objects::nonNull),
                                     "%s"),
-                                 */
+
                             )
                         )
                     ));
@@ -308,9 +308,10 @@ public class MainCoEvo extends Worker {
           }
         }
       }
+         */
     }
-  }
-
+}
+/*
   private static Function<Robot<?>, List<Item>> metrics(List<Locomotion.Metric> metrics, String
       prefix, Function<Robot<?>, List<Double>> task, String format) {
     return individual -> {
@@ -327,3 +328,5 @@ public class MainCoEvo extends Worker {
     };
   }
 }
+
+ */

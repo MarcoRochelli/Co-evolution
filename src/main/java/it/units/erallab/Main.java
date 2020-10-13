@@ -1,5 +1,3 @@
-
-
 package it.units.erallab;
 
 import com.google.common.base.Stopwatch;
@@ -11,6 +9,7 @@ import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
 import it.units.erallab.hmsrobots.tasks.locomotion.Outcome;
 import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Point2;
+import it.units.erallab.hmsrobots.util.Utils;
 import it.units.malelab.jgea.Worker;
 import it.units.malelab.jgea.core.IndependentFactory;
 import it.units.malelab.jgea.core.Individual;
@@ -64,7 +63,7 @@ public class Main extends Worker {
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "10"));         // total number of births not robots
+    int nBirths = i(a("nBirths", "10"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
@@ -94,14 +93,6 @@ public class Main extends Worker {
         )
     );
     List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
-    List<String> validationTransformationNames = l(a("validationTransformations", "")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    List<String> validationTerrainNames = l(a("validationTerrains", "flat")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    if (!validationTerrainNames.isEmpty() && validationTransformationNames.isEmpty()) {
-      validationTransformationNames.add("identity");
-    }
-    if (validationTerrainNames.isEmpty() && !validationTransformationNames.isEmpty()) {
-      validationTerrainNames.add(terrainNames.get(0));
-    }
     Settings physicsSettings = new Settings();
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
@@ -115,7 +106,8 @@ public class Main extends Worker {
     );
 
     CSVPrinter validationPrinter;
-    List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
+    //List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver"); // old
+    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensors.config", "representation", "signals");
     try {
       if (a("validationFile", "validation.txt") != null) {
         validationPrinter = new CSVPrinter(new FileWriter(
@@ -126,7 +118,6 @@ public class Main extends Worker {
       }
       List<String> headers = new ArrayList<>();
       headers.addAll(validationKeyHeaders);
-      headers.addAll(List.of("validation.transformation", "validation.terrain"));
       headers.addAll(validationOutcomeHeaders.stream().map(n -> "validation." + n).collect(Collectors.toList()));
       validationPrinter.printRecord(headers);
     } catch (IOException e) {
@@ -134,7 +125,7 @@ public class Main extends Worker {
       return;
     }
     //shows params on log
-    // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in ssh
+    // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in file. sh
     L.info("Terrains: " + terrainNames);
     L.info("Controller: " + controllers);
     L.info("Size: " + sizes);
@@ -173,7 +164,6 @@ public class Main extends Worker {
 
                   List<Sensor> sensors;  // list of sensors to use
                   if (sensorConfig.equals("vel-area")) {
-                    // sensors the voxel should have
                     sensors = List.of(
                         new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
                         new Normalization(new AreaRatio())
@@ -187,6 +177,7 @@ public class Main extends Worker {
                   } else {
                     throw new IllegalArgumentException("incorrect sensor string");
                   }
+
                   int nOfSignals = switch (signal) {
                     case "0" -> 0;
                     case "1" -> 1;
@@ -199,7 +190,7 @@ public class Main extends Worker {
                   Function<List<Double>, Robot<?>> mapper;
                   IndependentFactory<List<Double>> factory;
 
-                  boolean control ;
+                  boolean control;
                   switch (controller) {
                     case "homogeneous" -> control = false;
                     case "heterogeneous" -> control = true;
@@ -251,6 +242,18 @@ public class Main extends Worker {
                               .andThen(org.apache.commons.lang3.SerializationUtils::clone)
                               .andThen(trainingTask)
                               .andThen(outcomeTransformer)
+                      ),
+                      // save number of effective voxel of the robot and effective height and effective width
+                      new FunctionOfOneBest<>(
+                          individual -> List.of(
+                              new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
+                              //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
+                              new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
+                              new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d"),
+                              new Item("robot.cropped.shape",
+                                  PrintBodies.toString(it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull), Objects::nonNull),
+                                  "%s")
+                          )
                       )
                   ));
                   Listener<? super Object, ? super Robot<?>, ? super Double> listener;
@@ -279,7 +282,7 @@ public class Main extends Worker {
                         mapper,
                         factory,
                         PartialComparator.from(Double.class).reversed().comparing(Individual::getFitness)
-                        );
+                    );
                     //optimize
                     Collection<Robot<?>> solutions = evolver.solve(
                         trainingTask.andThen(fitnessFunction),
@@ -296,6 +299,46 @@ public class Main extends Worker {
                         solutions.size(),
                         stopwatch.elapsed(TimeUnit.SECONDS)
                     ));
+
+
+                    //do validation
+                    for (int n = 0; n <= numberOfValidations; n++) {
+                      for (int k = 0; k <= sizeOfvalidation; k++) {
+                        //build validation task
+                        Function<Robot<?>, Outcome> validationTask = new Locomotion(
+                            episodeTime,
+                            Locomotion.createTerrain("flat"),
+                            physicsSettings
+                        );
+
+                        validationTask = Utils.buildRobotTransformation("identity")  // change this
+                            .andThen(org.apache.commons.lang3.SerializationUtils::clone)
+                            .andThen(validationTask);
+
+
+                        Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
+                        try {
+                          List<Object> values = new ArrayList<>();
+                          values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
+                          values.addAll(List.of(n, k));
+                          List<Item> validationItems = outcomeTransformer.apply(validationOutcome);
+                          values.addAll(validationOutcomeHeaders.stream()
+                              .map(l -> validationItems.stream()
+                                  .filter(i -> i.getName().equals(l))
+                                  .map(Item::getValue)
+                                  .findFirst()
+                                  .orElse(null))
+                              .collect(Collectors.toList())
+                          );
+                          validationPrinter.printRecord(values);
+                          validationPrinter.flush();
+                        } catch (IOException e) {
+                          L.severe(String.format("Cannot save validation results due to %s", e));
+                        }
+                      }
+                    }
+
+
                   } catch (InterruptedException | ExecutionException e) {
                     L.severe(String.format("Cannot complete %s due to %s",
                         keys,
