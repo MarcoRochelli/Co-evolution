@@ -4,9 +4,11 @@ import com.google.common.base.Stopwatch;
 import it.units.erallab.hmsrobots.core.objects.Robot;
 import it.units.erallab.hmsrobots.core.objects.SensingVoxel;
 import it.units.erallab.hmsrobots.core.sensors.*;
+import it.units.erallab.hmsrobots.tasks.locomotion.Footprint;
 import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
 import it.units.erallab.hmsrobots.tasks.locomotion.Outcome;
 import it.units.erallab.hmsrobots.util.Grid;
+import it.units.erallab.hmsrobots.util.Point2;
 import it.units.erallab.hmsrobots.util.Utils;
 import it.units.malelab.jgea.Worker;
 import it.units.malelab.jgea.core.IndependentFactory;
@@ -23,7 +25,6 @@ import it.units.malelab.jgea.representation.sequence.FixedLengthListFactory;
 import it.units.malelab.jgea.representation.sequence.numeric.UniformDoubleFactory;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
-import org.apache.commons.lang3.SerializationUtils;
 import org.dyn4j.dynamics.Settings;
 
 import java.io.File;
@@ -31,12 +32,15 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static it.units.malelab.jgea.core.util.Args.*;
 
+// mia versione
 public class MainCoEvo extends Worker {
 
   public static final int CACHE_SIZE = 10000;
@@ -51,14 +55,15 @@ public class MainCoEvo extends Worker {
 
   @Override
   public void run() {
-/*
+    Random random = new Random();
     // settings for the simulation
     final int numberOfValidations = 10;
     final int sizeOfvalidation = 3;
     final int nOfGaussians = 5;
+    int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "10"));         // total number of births not robots
+    int nBirths = i(a("nBirths", "10"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
@@ -68,56 +73,68 @@ public class MainCoEvo extends Worker {
     List<String> representations = l(a("representation", "bit"));   // bit or gaussian
     List<String> signals = l(a("signal", "1"));   // can be 0,1,2 or 4
 
-
-    // inner neurons
-    int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
-    List<String> terrainNames = l(a("terrain", "flat"));   //flat
-    Locomotion.Metric fitnessMetric = Locomotion.Metric.valueOf(a("fitnessMetric", Locomotion.Metric.TRAVEL_X_RELATIVE_VELOCITY.name().toLowerCase()).toUpperCase());
-    List<Locomotion.Metric> allMetrics = l(a("metrics", List.of(Locomotion.Metric.values()).stream().map(m -> m.name().toLowerCase()).collect(Collectors.joining(",")))).stream()
-        .map(String::toUpperCase)
-        .map(Locomotion.Metric::valueOf)
-        .collect(Collectors.toList());
-    if (!allMetrics.contains(fitnessMetric)) {
-      allMetrics.add(fitnessMetric);
-    }
+    List<String> terrainNames = l(a("terrain", "flat"));
+    Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;  // changed was relative before
+    Function<Outcome, List<Item>> outcomeTransformer = o -> DataCollector.fromBean(
+        o,
+        true,
+        Map.of(
+            Double.TYPE, "%5.3f",
+            List.class, "%30.30s",
+            Grid.class, "%30.30s"
+        ),
+        Map.of(
+            List.class, l -> ((List<?>) l).stream()
+                .map(Object::toString)
+                .collect(Collectors.joining("|")),
+            Grid.class, g -> Grid.create((Grid<Boolean>) g, b -> b ? 'o' : '.').rows().stream()
+                .map(r -> r.stream()
+                    .map(c -> Character.toString(c))
+                    .collect(Collectors.joining()))
+                .collect(Collectors.joining("|"))
+        )
+    );
+    List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
 
     Settings physicsSettings = new Settings();
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
-
-        //a("dir", ".")),  // where to save should i change this? i didn't have to in old code
-        //a("fileStats", null)              // how to name it
-
-
-        // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileStats", "stats.txt")
-
     );
+
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
-
-        //a("dir", ".")),
-        //a("fileSerialized", null)
-
-
-        // to create a file to check if it works
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileSerialized", "serialized.txt")
-
     );
 
-
-
-
+    CSVPrinter validationPrinter;
+    //List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver"); // old
+    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensors.config", "representation", "signals");
+    try {
+      if (a("validationFile", "validation.txt") != null) {
+        validationPrinter = new CSVPrinter(new FileWriter(
+            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
+        ), CSVFormat.DEFAULT.withDelimiter(';'));
+      } else {
+        validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
+      }
+      List<String> headers = new ArrayList<>();
+      headers.addAll(validationKeyHeaders);
+      headers.addAll(validationOutcomeHeaders.stream().map(n -> "validation." + n).collect(Collectors.toList()));
+      validationPrinter.printRecord(headers);
+    } catch (IOException e) {
+      L.severe(String.format("Cannot create printer for validation results due to %s", e));
+      return;
+    }
     //shows params on log
-    // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in ssh
+    // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in file. sh
     L.info("Terrains: " + terrainNames);
     L.info("Controller: " + controllers);
     L.info("Size: " + sizes);
     L.info("SensorConfig: " + sensorsConfig);
     L.info("Representation: " + representations);
     L.info("Signals: " + signals);
-
     //start iterations
     for (int seed : seeds) {
       for (String representation : representations) {
@@ -126,7 +143,6 @@ public class MainCoEvo extends Worker {
             for (String size : sizes) {
               for (String sensorConfig : sensorsConfig) {
                 for (String signal : signals) {
-
                   Map<String, String> keys = new TreeMap<>(Map.of(
                       "seed", Integer.toString(seed),
                       "terrain", terrainName,
@@ -136,15 +152,6 @@ public class MainCoEvo extends Worker {
                       "representation", representation,
                       "signals", signal
                   ));
-
-                  //problem to solve
-                  Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
-                      new Locomotion(
-                          episodeTime,
-                          Locomotion.createTerrain(terrainName),
-                          allMetrics,
-                          physicsSettings
-                      ), CACHE_SIZE);
 
                   int width;
                   int height;
@@ -160,7 +167,6 @@ public class MainCoEvo extends Worker {
 
                   List<Sensor> sensors;  // list of sensors to use
                   if (sensorConfig.equals("vel-area")) {
-                    // sensors the voxel should have
                     sensors = List.of(
                         new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
                         new Normalization(new AreaRatio())
@@ -174,6 +180,7 @@ public class MainCoEvo extends Worker {
                   } else {
                     throw new IllegalArgumentException("incorrect sensor string");
                   }
+
                   int nOfSignals = switch (signal) {
                     case "0" -> 0;
                     case "1" -> 1;
@@ -186,23 +193,25 @@ public class MainCoEvo extends Worker {
                   Function<List<Double>, Robot<?>> mapper;
                   IndependentFactory<List<Double>> factory;
 
-                  boolean control ;
-                  if (controller.equals("homogeneous")) {
-                    control = false;
-                  } else if (controller.equals("heterogeneous")) {
-                    control = true;
-                  } else if(controller.equals("position")) { // i could use only
-                    control = false;
-                    mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, nOfSignals);
-                    UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                    factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
-                  }else if(controller.equals("positionGaussian")) {
-                    control = false;
-                    mapper = new GaussianPositionMapper(control, nOfGaussians, width, height, sensors, true, innerNeurons, nOfSignals);
-                    factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
-                  }
-                  else {
-                    throw new IllegalArgumentException("incorrect controller string");
+                  boolean control;
+                  switch (controller) {
+                    case "homogeneous" -> control = false;
+                    case "heterogeneous" -> control = true;
+                    /*
+                    case "position" -> {
+                      control = false;
+                      mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, nOfSignals);
+                      UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+                      factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
+                    }
+                    case "positionGaussian" -> {
+                      control = false;
+                      mapper = new GaussianPositionMapper(control, nOfGaussians, width, height, sensors, true, innerNeurons, nOfSignals);
+                      factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
+                    }
+
+                     */
+                    default -> throw new IllegalArgumentException("incorrect controller string");
                   }
 
                   switch (representation) {
@@ -218,72 +227,73 @@ public class MainCoEvo extends Worker {
                     default -> throw new IllegalArgumentException("incorrect representation string");
                   }
 
-                  // to evolve the robot
+
+                  //build training task
+                  Function<Robot<?>, Outcome> trainingTask = Misc.cached(
+                      new Locomotion(
+                          episodeTime,
+                          Locomotion.createTerrain(terrainName),
+                          physicsSettings
+                      ), CACHE_SIZE);
+
+                  //build main data collectors for listener
+                  List<DataCollector<?, ? super Robot<SensingVoxel>, ? super Double>> collectors = new ArrayList<DataCollector<?, ? super Robot<SensingVoxel>, ? super Double>>(List.of(
+                      new Static(keys),
+                      new Basic(),
+                      new Population(),
+                      new Diversity(),
+                      new BestInfo("%5.2f"),
+                      new FunctionOfOneBest<>(
+                          ((Function<Individual<?, ? extends Robot<SensingVoxel>, ? extends Double>, Robot<SensingVoxel>>) Individual::getSolution)
+                              .andThen(org.apache.commons.lang3.SerializationUtils::clone)
+                              .andThen(trainingTask)
+                              .andThen(outcomeTransformer)
+                      ),
+                      // save number of effective voxel of the robot and effective height and effective width
+                      new FunctionOfOneBest<>(
+                          individual -> List.of(
+                              new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
+                              //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
+                              new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
+                              new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d"),
+                              new Item("robot.cropped.shape",
+                                  PrintBodies.toString(it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull), Objects::nonNull),
+                                  "%s")
+                          )
+                      )
+                  ));
+                  Listener<? super Object, ? super Robot<?>, ? super Double> listener;
+                  if (statsListenerFactory.getBaseFileName() == null) {
+                    listener = listener(collectors.toArray(DataCollector[]::new));
+                  } else {
+                    listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
+                  }
+                  if (serializedListenerFactory.getBaseFileName() != null) {
+                    listener = serializedListenerFactory.build(
+                        new Static(keys),
+                        new Basic(),
+                        new FunctionOfOneBest<>(i -> List.of(
+                            new Item("fitness.value", i.getFitness(), "%7.5f"),
+                            new Item("serialized.robot", SerializationUtils.safelySerialize(i.getSolution()), "%s"),
+                            new Item("serialized.genotype", SerializationUtils.safelySerialize((Serializable) i.getGenotype()), "%s")
+                        ))
+                    ).then(listener);
+                  }
                   try {
                     Stopwatch stopwatch = Stopwatch.createStarted();
                     L.info(String.format("Starting %s", keys));
 
                     // CREATES THE EVOLVER
-                    Evolver<List<Double>, Robot<?>, Double> evolver = new CMAESEvolver<>(
+                    Evolver<?, Robot<?>, Double> evolver = new CMAESEvolver<>(
                         mapper,
                         factory,
-                        PartialComparator.from(Double.class).reversed().comparing(Individual::getFitness), // reversed is ABSOLUTELY NECESSARY i was minimizing instead of maximizing
-                        -1,
-                        1
+                        PartialComparator.from(Double.class).reversed().comparing(Individual::getFitness)
                     );
-
-                    //build main data collectors for listener
-                    List<DataCollector<?, ? super Robot<?>, ? super Double>> collectors = new ArrayList<DataCollector<?, ? super Robot<?>, ? super Double>>(List.of(
-                        new Static(keys),
-                        new Basic(),
-                        new Population(),
-                        new Diversity(),
-                        new BestInfo("%5.2f"),
-                        // if deleted file stats does not have last 10 columns
-                        new FunctionOfOneBest<>(
-                            ((Function<Individual<?, ? extends Robot<?>, ? extends Double>, Robot<?>>) Individual::getSolution)
-                                .andThen(SerializationUtils::clone)
-                                .andThen(metrics(allMetrics, "training", trainingTask, "%6.2f"))
-                        ),
-                        // save number of effective voxel of the robot and effective height and effective width
-                        new FunctionOfOneBest<>(
-                            individual -> List.of(
-                                new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
-                                //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
-                                new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
-                                new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d"),
-                                new Item("robot.cropped.shape",
-                                    PrintBodies.toString(it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull), Objects::nonNull),
-                                    "%s")
-                                 // not normalized body
-                                new Item("robot.shape",
-                                    PrintBodies.toString(individual.getSolution().getVoxels(), Objects::nonNull),
-                                    "%s"),
-
-                            )
-                        )
-                    ));
-                    Listener<? super Object, ? super Robot<?>, ? super Double> listener;
-                    if (statsListenerFactory.getBaseFileName() == null) {
-                      listener = listener(collectors.toArray(DataCollector[]::new));
-                    } else {
-                      listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
-                    }
-                    if (serializedListenerFactory.getBaseFileName() != null) {
-                      listener = serializedListenerFactory.build(
-                          new Static(keys),
-                          new Basic(),
-                          new FunctionOfOneBest<>(i -> List.of(
-                              new Item("fitness.value", i.getFitness(), "%7.5f"),
-                              new Item("serialized.robot", Utils.safelySerialize(i.getSolution()), "%s"),
-                              new Item("serialized.genotype", Utils.safelySerialize((Serializable) i.getGenotype()), "%s")
-                          ))
-                      ).then(listener);
-                    }
-                    Collection<Robot<?>> solutions = evolver.solve( // here uses the evolver to solve the problem
-                        trainingTask.andThen(values -> values.get(allMetrics.indexOf(fitnessMetric))),
+                    //optimize
+                    Collection<Robot<?>> solutions = evolver.solve(
+                        trainingTask.andThen(fitnessFunction),
                         new Births(nBirths),
-                        new Random(seed),
+                        random,
                         executorService,
                         Listener.onExecutor(
                             listener,
@@ -295,7 +305,52 @@ public class MainCoEvo extends Worker {
                         solutions.size(),
                         stopwatch.elapsed(TimeUnit.SECONDS)
                     ));
-                  } catch (Throwable e) {
+
+
+                    //do validation
+
+                    for (int n = 0; n <= numberOfValidations; n++) {
+                      for (int k = 0; k <= sizeOfvalidation; k++) {
+                        Function<Robot<?>, Outcome> validationTask = new Locomotion(
+                            episodeTime,
+                            Locomotion.createTerrain("flat"),
+                            physicsSettings
+                        );
+
+                        validationTask = Utils.buildRobotTransformation("identity")  // change this
+                            .andThen(org.apache.commons.lang3.SerializationUtils::clone)
+                            .andThen(validationTask);
+
+
+                        //validationTask = ModifyRobot.modifyRobot(k).andThen(org.apache.commons.lang3.SerializationUtils::clone).andThen(validationTask);
+
+
+
+                        Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
+                        try {
+                          List<Object> values = new ArrayList<>();
+                          values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
+                          values.addAll(List.of(n, k));
+                          List<Item> validationItems = outcomeTransformer.apply(validationOutcome);
+                          values.addAll(validationOutcomeHeaders.stream()
+                              .map(l -> validationItems.stream()
+                                  .filter(i -> i.getName().equals(l))
+                                  .map(Item::getValue)
+                                  .findFirst()
+                                  .orElse(null))
+                              .collect(Collectors.toList())
+                          );
+                          validationPrinter.printRecord(values);
+                          validationPrinter.flush();
+                        } catch (IOException e) {
+                          L.severe(String.format("Cannot save validation results due to %s", e));
+                        }
+                      }
+                    }
+
+
+
+                  } catch (InterruptedException | ExecutionException e) {
                     L.severe(String.format("Cannot complete %s due to %s",
                         keys,
                         e
@@ -308,25 +363,23 @@ public class MainCoEvo extends Worker {
           }
         }
       }
-         */
     }
-}
-/*
-  private static Function<Robot<?>, List<Item>> metrics(List<Locomotion.Metric> metrics, String
-      prefix, Function<Robot<?>, List<Double>> task, String format) {
-    return individual -> {
-      List<Double> values = task.apply(individual);
-      List<Item> items = new ArrayList<>(metrics.size());
-      for (int i = 0; i < metrics.size(); i++) {
-        items.add(new Item(
-            prefix + "." + metrics.get(i).name().toLowerCase(),
-            values.get(i),
-            format
-        ));
-      }
-      return items;
-    };
+    try {
+      validationPrinter.close(true);
+    } catch (IOException e) {
+      L.severe(String.format("Cannot close printer for validation results due to %s", e));
+    }
+  }
+
+  private static Outcome prototypeOutcome() {
+    return new Outcome(
+        0d, 10d, 0d, 0d, 0d,
+        new TreeMap<>(Map.of(0d, Point2.build(0d, 0d))),
+        new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
+            i -> (double) i / 10d,
+            i -> new Footprint(new boolean[]{true, false, true}))
+        )),
+        new TreeMap<>(Map.of(0d, Grid.create(1, 1, true)))
+    );
   }
 }
-
- */

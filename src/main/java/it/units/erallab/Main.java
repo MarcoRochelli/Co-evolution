@@ -84,15 +84,17 @@ public class Main extends Worker {
             Grid.class, "%30.30s"
         ),
         Map.of(
-            List.class, l -> ((List<?>) l).stream().map(Object::toString).collect(Collectors.joining(";")),
+            List.class, l -> ((List<?>) l).stream()
+                .map(Object::toString)
+                .collect(Collectors.joining("|")),
             Grid.class, g -> Grid.create((Grid<Boolean>) g, b -> b ? 'o' : '.').rows().stream()
                 .map(r -> r.stream()
                     .map(c -> Character.toString(c))
                     .collect(Collectors.joining()))
-                .collect(Collectors.joining(";"))
+                .collect(Collectors.joining("|"))
         )
     );
-    List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
+
     Settings physicsSettings = new Settings();
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
@@ -105,25 +107,7 @@ public class Main extends Worker {
         a("fileSerialized", "serialized.txt")
     );
 
-    CSVPrinter validationPrinter;
-    //List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver"); // old
-    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensors.config", "representation", "signals");
-    try {
-      if (a("validationFile", "validation.txt") != null) {
-        validationPrinter = new CSVPrinter(new FileWriter(
-            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
-        ), CSVFormat.DEFAULT.withDelimiter(';'));
-      } else {
-        validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
-      }
-      List<String> headers = new ArrayList<>();
-      headers.addAll(validationKeyHeaders);
-      headers.addAll(validationOutcomeHeaders.stream().map(n -> "validation." + n).collect(Collectors.toList()));
-      validationPrinter.printRecord(headers);
-    } catch (IOException e) {
-      L.severe(String.format("Cannot create printer for validation results due to %s", e));
-      return;
-    }
+
     //shows params on log
     // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in file. sh
     L.info("Terrains: " + terrainNames);
@@ -194,6 +178,7 @@ public class Main extends Worker {
                   switch (controller) {
                     case "homogeneous" -> control = false;
                     case "heterogeneous" -> control = true;
+                    /*
                     case "position" -> {
                       control = false;
                       mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, nOfSignals);
@@ -205,6 +190,8 @@ public class Main extends Worker {
                       mapper = new GaussianPositionMapper(control, nOfGaussians, width, height, sensors, true, innerNeurons, nOfSignals);
                       factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
                     }
+
+                     */
                     default -> throw new IllegalArgumentException("incorrect controller string");
                   }
 
@@ -301,42 +288,8 @@ public class Main extends Worker {
                     ));
 
 
-                    //do validation
-                    for (int n = 0; n <= numberOfValidations; n++) {
-                      for (int k = 0; k <= sizeOfvalidation; k++) {
-                        //build validation task
-                        Function<Robot<?>, Outcome> validationTask = new Locomotion(
-                            episodeTime,
-                            Locomotion.createTerrain("flat"),
-                            physicsSettings
-                        );
-
-                        validationTask = Utils.buildRobotTransformation("identity")  // change this
-                            .andThen(org.apache.commons.lang3.SerializationUtils::clone)
-                            .andThen(validationTask);
 
 
-                        Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
-                        try {
-                          List<Object> values = new ArrayList<>();
-                          values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
-                          values.addAll(List.of(n, k));
-                          List<Item> validationItems = outcomeTransformer.apply(validationOutcome);
-                          values.addAll(validationOutcomeHeaders.stream()
-                              .map(l -> validationItems.stream()
-                                  .filter(i -> i.getName().equals(l))
-                                  .map(Item::getValue)
-                                  .findFirst()
-                                  .orElse(null))
-                              .collect(Collectors.toList())
-                          );
-                          validationPrinter.printRecord(values);
-                          validationPrinter.flush();
-                        } catch (IOException e) {
-                          L.severe(String.format("Cannot save validation results due to %s", e));
-                        }
-                      }
-                    }
 
 
                   } catch (InterruptedException | ExecutionException e) {
@@ -352,11 +305,6 @@ public class Main extends Worker {
           }
         }
       }
-    }
-    try {
-      validationPrinter.close(true);
-    } catch (IOException e) {
-      L.severe(String.format("Cannot close printer for validation results due to %s", e));
     }
   }
 
