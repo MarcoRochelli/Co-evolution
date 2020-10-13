@@ -9,7 +9,9 @@ import it.units.erallab.hmsrobots.core.sensors.AreaRatio;
 import it.units.erallab.hmsrobots.core.sensors.Normalization;
 import it.units.erallab.hmsrobots.core.sensors.Sensor;
 import it.units.erallab.hmsrobots.core.sensors.Velocity;
-import it.units.erallab.hmsrobots.tasks.Locomotion;
+
+import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
+import it.units.erallab.hmsrobots.tasks.locomotion.Outcome;
 import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Utils;
 import it.units.erallab.hmsrobots.viewers.GridEpisodeRunner;
@@ -182,10 +184,11 @@ public class GaussianPositionMapper implements Function<List<Double>, Robot<?>> 
   // to test the mapper
   public static void main(String[] args) {
     Random random = new Random();
+
+    // problem to solve
     Locomotion locomotion = new Locomotion(
         40,
         Locomotion.createTerrain("flat"),
-        Lists.newArrayList(Locomotion.Metric.TRAVEL_X_VELOCITY),
         new Settings()
     );
     List<Sensor> sensors = List.of(  // list of sensors to use

@@ -81,7 +81,7 @@ public class ControllerComparison extends Worker {
   }
 
   public static void main(String[] args) {
-    new ControllerComparison(args);
+    new Main(args);
   }
 
   @Override

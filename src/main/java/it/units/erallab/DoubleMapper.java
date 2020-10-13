@@ -1,6 +1,5 @@
 package it.units.erallab;
 
-import com.google.common.collect.Lists;
 import it.units.erallab.hmsrobots.core.controllers.DistributedSensing;
 import it.units.erallab.hmsrobots.core.controllers.MultiLayerPerceptron;
 import it.units.erallab.hmsrobots.core.objects.Robot;
@@ -9,7 +8,7 @@ import it.units.erallab.hmsrobots.core.sensors.AreaRatio;
 import it.units.erallab.hmsrobots.core.sensors.Normalization;
 import it.units.erallab.hmsrobots.core.sensors.Sensor;
 import it.units.erallab.hmsrobots.core.sensors.Velocity;
-import it.units.erallab.hmsrobots.tasks.Locomotion;
+import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
 import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Utils;
 import it.units.erallab.hmsrobots.viewers.GridEpisodeRunner;
@@ -153,16 +152,14 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
                 new Normalization(new AreaRatio())
         ));
          */
-
     Random random = new Random();
+
     // problem to solve
     Locomotion locomotion = new Locomotion(
         40,
-        Locomotion.createTerrain("flat"), // se uneven deve esserci qualcosa dopo es. uneven5; uneven-qualcosa da errore
-        Lists.newArrayList(Locomotion.Metric.TRAVEL_X_VELOCITY),
+        Locomotion.createTerrain("flat"),
         new Settings()
     );
-
     List<Sensor> sensors = List.of(  // list of sensors to use
         new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
         new Normalization(new AreaRatio())

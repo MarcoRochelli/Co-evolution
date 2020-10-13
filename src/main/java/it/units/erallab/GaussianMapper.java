@@ -9,7 +9,7 @@ import it.units.erallab.hmsrobots.core.sensors.AreaRatio;
 import it.units.erallab.hmsrobots.core.sensors.Normalization;
 import it.units.erallab.hmsrobots.core.sensors.Sensor;
 import it.units.erallab.hmsrobots.core.sensors.Velocity;
-import it.units.erallab.hmsrobots.tasks.Locomotion;
+import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
 import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Utils;
 import it.units.erallab.hmsrobots.viewers.GridEpisodeRunner;
@@ -176,11 +176,11 @@ public class GaussianMapper implements Function<List<Double>, Robot<?>> {
   // to test the mapper
   public static void main(String[] args) {
     Random random = new Random();
+
     // problem to solve
     Locomotion locomotion = new Locomotion(
         40,
-        Locomotion.createTerrain("flat"), // se uneven deve esserci qualcosa dopo es. uneven5; uneven-qualcosa da errore
-        Lists.newArrayList(Locomotion.Metric.TRAVEL_X_VELOCITY),
+        Locomotion.createTerrain("flat"),
         new Settings()
     );
 
