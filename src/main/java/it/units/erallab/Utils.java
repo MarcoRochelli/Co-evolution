@@ -74,6 +74,8 @@ public class Utils {
     }
   }
 
+
+
   public static UnaryOperator<Robot<?>> buildRobotTransformation(String name) {
     String areaBreakable = "areaBreak-(?<rate>\\d+(\\.\\d+)?)-(?<threshold>\\d+(\\.\\d+)?)-(?<seed>\\d+)";
     String timeBreakable = "timeBreak-(?<time>\\d+(\\.\\d+)?)-(?<seed>\\d+)";
@@ -88,15 +90,17 @@ public class Utils {
       return robot -> {
         Robot<?> transformed = new Robot<>(
             ((Robot<SensingVoxel>) robot).getController(),
-            Grid.create(SerializationUtils.clone((Grid<SensingVoxel>) robot.getVoxels()), v -> v == null ? null : (random.nextDouble() > rate ? v : new BreakableVoxel(
-                v.getSensors(),
-                random,
-                Map.of(
-                    BreakableVoxel.ComponentType.ACTUATOR, Set.of(BreakableVoxel.MalfunctionType.FROZEN),
-                    BreakableVoxel.ComponentType.SENSORS, Set.of(BreakableVoxel.MalfunctionType.ZERO)
-                ),
-                Map.of(BreakableVoxel.MalfunctionTrigger.AREA, threshold)
-            )))
+            Grid.create(SerializationUtils.clone((Grid<SensingVoxel>) robot.getVoxels()),
+                v -> v == null ? null : (random.nextDouble() > rate ? v : new BreakableVoxel(
+                    v.getSensors(),
+                    random,
+                    Map.of(
+                        BreakableVoxel.ComponentType.ACTUATOR, Set.of(BreakableVoxel.MalfunctionType.FROZEN),
+                        BreakableVoxel.ComponentType.SENSORS, Set.of(BreakableVoxel.MalfunctionType.ZERO)
+                    ),
+                    Map.of(BreakableVoxel.MalfunctionTrigger.AREA, threshold),
+                    1 // is this ok ???????
+                )))
         );
         return transformed;
       };
@@ -121,7 +125,8 @@ public class Utils {
                   BreakableVoxel.ComponentType.ACTUATOR, Set.of(BreakableVoxel.MalfunctionType.FROZEN),
                   BreakableVoxel.ComponentType.SENSORS, Set.of(BreakableVoxel.MalfunctionType.ZERO)
               ),
-              Map.of(BreakableVoxel.MalfunctionTrigger.TIME, time * ((double) (i + 1) / (double) coords.size()))
+              Map.of(BreakableVoxel.MalfunctionTrigger.TIME, time * ((double) (i + 1) / (double) coords.size())),
+              1
           ));
         }
         return new Robot<>(

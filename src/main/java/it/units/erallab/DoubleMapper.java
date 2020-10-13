@@ -53,11 +53,9 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
     int nOfInputs = signals * 4 + sensors.stream().mapToInt(s -> s.domains().length).sum();
     int nOfOutputs = signals * 4 + 1;
     int nOfWeights = MultiLayerPerceptron.countWeights(MultiLayerPerceptron.countNeurons(nOfInputs, innerNeurons, nOfOutputs));
-
     if (heterogeneous) {
       return width * height + nOfWeights * width * height;
     } else
-
       return width * height + nOfWeights;
   }
 
@@ -101,22 +99,6 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
       }
     }
 
-    /*
-    // to know number of effective voxel of the robot effective width and effective height  WORKS
-    int nOfVoxels = 0;
-    for (Grid.Entry<SensingVoxel> entry : body) {
-      if (entry.getValue() != null) {
-        nOfVoxels++;
-      }
-    }
-    Grid<SensingVoxel> croppedBody = Utils.cropGrid(body,Objects::nonNull);
-    int effectiveWidth = croppedBody.getW();
-    int effectiveHeight = croppedBody.getH();
-    System.out.println("dimensione del robot: " + nOfVoxels);
-    System.out.println("larghezza del robot: " + effectiveWidth);
-    System.out.println("altezza del robot: " + effectiveHeight);
-     */
-
     // creates a distributed controller
     DistributedSensing distributedSensing = new DistributedSensing(body, signals);
     for (Grid.Entry<SensingVoxel> entry : body) {
@@ -138,15 +120,17 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
         int from = entry.getX() * nOfVoxelWeights + entry.getY() * width * nOfVoxelWeights; //  + width * height is not needed because i remove it before
         int to = from + nOfVoxelWeights;
         double[] voxelWeights = Arrays.copyOfRange(weights, from, to);
+
         /*
         System.out.println("parto da: " + from);
         System.out.println("fino a: " + to);
         for (int i = 0; i < voxelWeights.length; i++) {
           System.out.println("voxelWeights:[" + i + "] " + voxelWeights[i]);
         }
-
          */
+
         mlp.setParams(voxelWeights);
+
       } else {
         // i have to assign the correct subset of weights to this
         mlp.setParams(weights);
@@ -188,7 +172,7 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
       innerNeurons[i] = random.nextInt();
     }
 
-    DoubleMapper mapper = new DoubleMapper(true, 10, 10, sensors, innerNeurons, 1);
+    DoubleMapper mapper = new DoubleMapper(false, 10, 10, sensors, innerNeurons, 0);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
     System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
@@ -196,9 +180,9 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
     Robot<?> robot = mapper.apply(genotype);
 
 
-    Grid<Pair<String, Robot<?>>> namedSolutionGrid = Grid.create(1, 1);// i create a one for one graphic
-    namedSolutionGrid.set(0, 0, Pair.of("mostro", robot));        // where i put mostro
-    ScheduledExecutorService uiExecutor = Executors.newScheduledThreadPool(4); // number of available core??
+    Grid<Pair<String, Robot<?>>> namedSolutionGrid = Grid.create(1, 1);
+    namedSolutionGrid.set(0, 0, Pair.of("mostro", robot));
+    ScheduledExecutorService uiExecutor = Executors.newScheduledThreadPool(4);
     ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     GridOnlineViewer gridOnlineViewer = new GridOnlineViewer(Grid.create(namedSolutionGrid, Pair::getLeft), uiExecutor);
     gridOnlineViewer.start(1); // delay before showing the video simulation

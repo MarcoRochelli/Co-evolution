@@ -7,10 +7,25 @@ import it.units.malelab.jgea.representation.sequence.numeric.UniformDoubleFactor
 
 import java.util.List;
 import java.util.Random;
+import java.util.function.Predicate;
 
 import static java.lang.Math.*;
 
 public class PrintBodies {
+
+  public static <K> String toString(Grid<K> grid, Predicate<K> p) {
+    StringBuilder sb = new StringBuilder();
+    for (int y = 0; y < grid.getH(); y++) {
+      for (int x = 0; x < grid.getW(); x++) {
+        sb.append(p.test(grid.get(x, y)) ? "1" : "0");
+      }
+      if (y < grid.getH() - 1) {
+        sb.append(String.format("/"));
+      }
+    }
+    return sb.toString();
+  }
+
 
   public static void main(String[] args) {
     Random random = new Random();
@@ -105,4 +120,5 @@ public class PrintBodies {
       System.out.println();
     }
   }
+
 }

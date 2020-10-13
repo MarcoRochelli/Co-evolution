@@ -49,23 +49,23 @@ public class MainCoEvo extends Worker {
   public void run() {
     // settings for the simulation
     final int numberOfValidations = 10;
-    final int typeOfValidations = 3;
+    final int sizeOfvalidation = 3;
     final int nOfGaussians = 5;
-    final int signals = 1;
 
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "50"));         // total number of births not robots
+    int nBirths = i(a("nBirths", "10"));         // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
-    List<String> sizes = l(a("sizes", "5x5,10x10")); //5x5 or 10x10
-    List<String> controllers = l(a("controllers", "homogeneous,heterogeneous"));  // homogenous or heterogeneous
-    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area,vel-area-touch")); // vel-area or vel-area-touch
-    List<String> representations = l(a("representation", "position,positionGaussian"));   // bit or gaussian or position or positionGaussian
+    List<String> sizes = l(a("sizes", "5x5")); //5x5 or 10x10
+    List<String> controllers = l(a("controllers", "homogeneous"));  // homogenous or heterogeneous
+    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area")); // vel-area or vel-area-touch
+    List<String> representations = l(a("representation", "bit"));   // bit or gaussian or position or positionGaussian
+    List<String> signals = l(a("signal", "1"));   // can be 0,1,2 or 4
 
 
     // inner neurons
-    int[] innerNeurons = new int[0]; // array that sets number of inner neuron foe each layer
+    int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
     List<String> terrainNames = l(a("terrain", "flat"));   //flat
     Locomotion.Metric fitnessMetric = Locomotion.Metric.valueOf(a("fitnessMetric", Locomotion.Metric.TRAVEL_X_RELATIVE_VELOCITY.name().toLowerCase()).toUpperCase());
     List<Locomotion.Metric> allMetrics = l(a("metrics", List.of(Locomotion.Metric.values()).stream().map(m -> m.name().toLowerCase()).collect(Collectors.joining(",")))).stream()
@@ -101,46 +101,17 @@ public class MainCoEvo extends Worker {
 
     );
 
-    /*
-    // NEW csv printer added to print validation results
-    List<String> validationTransformationNames = l(a("validationTransformations", "")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    List<String> validationTerrainNames = l(a("validationTerrains", "")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    if (!validationTerrainNames.isEmpty() && validationTransformationNames.isEmpty()) {
-      validationTransformationNames.add("identity");
-    }
-    if (validationTerrainNames.isEmpty() && !validationTransformationNames.isEmpty()) {
-      validationTerrainNames.add(terrainNames.get(0));
-    }
 
-    CSVPrinter validationPrinter;
-    List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
-    try {
-      if (a("validationFile", null) != null) {
-        validationPrinter = new CSVPrinter(new FileWriter(
-            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
-        ), CSVFormat.DEFAULT.withDelimiter(';'));
-      } else {
-        validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
-      }
-      List<String> headers = new ArrayList<>();
-      headers.addAll(validationKeyHeaders);
-      headers.addAll(List.of("validation.transformation", "validation.terrain"));
-      headers.addAll(allMetrics.stream().map(m -> m.toString().toLowerCase()).collect(Collectors.toList()));
-      validationPrinter.printRecord(headers);
-    } catch (IOException e) {
-      L.severe(String.format("Cannot create printer for validation results due to %s", e));
-      return;
-    }
-
-     */
 
 
     //shows params on log
+    // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in ssh
     L.info("Terrains: " + terrainNames);
     L.info("Controller: " + controllers);
     L.info("Size: " + sizes);
     L.info("SensorConfig: " + sensorsConfig);
     L.info("Representation: " + representations);
+    L.info("Signals: " + signals);
 
     //start iterations
     for (int seed : seeds) {
@@ -149,200 +120,187 @@ public class MainCoEvo extends Worker {
           for (String controller : controllers) {
             for (String size : sizes) {
               for (String sensorConfig : sensorsConfig) {
-                Map<String, String> keys = new TreeMap<>(Map.of(
-                    "seed", Integer.toString(seed),
-                    "terrain", terrainName,
-                    "controller", controller,
-                    "size", size,
-                    "sensor.config", sensorConfig,
-                    "representation", representation
-                ));
-                //problem to solve
-                Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
-                    new Locomotion(
-                        episodeTime,
-                        Locomotion.createTerrain(terrainName),
-                        allMetrics,
-                        physicsSettings
-                    ), CACHE_SIZE);
+                for (String signal : signals) {
 
-                int width;
-                int height;
-                if (size.equals("5x5")) {
-                  width = 5;
-                  height = 5;
-                } else if (size.equals("10x10")) {
-                  width = 10;
-                  height = 10;
-                } else {
-                  throw new IllegalArgumentException("incorrect size string");
-                }
-
-                List<Sensor> sensors;  // list of sensors to use
-                if (sensorConfig.equals("vel-area")) {
-                  // sensors the voxel should have
-                  sensors = List.of(
-                      new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
-                      new Normalization(new AreaRatio())
-                  );
-                } else if (sensorConfig.equals("vel-area-touch")) {
-                  sensors = List.of(
-                      new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
-                      new Normalization(new AreaRatio()),
-                      new Normalization(new Average(new Touch(), 0.5)) // Eric said that it is better to add average with 0.5
-                  );
-                } else {
-                  throw new IllegalArgumentException("incorrect sensor string");
-                }
-                boolean control;
-                if (controller.equals("homogeneous")) {
-                  control = false;
-                } else if (controller.equals("heterogeneous")) {
-                  control = true;
-                } else {
-                  throw new IllegalArgumentException("incorrect controller string");
-                }
-
-                // wow i used ereditariety to create mapper and factory!
-                Function<List<Double>, Robot<?>> mapper;
-                IndependentFactory<List<Double>> factory;
-                // creates mapper and factory GAUSSIAN REPRESENTATION
-                switch (representation) {
-                  case "bit" -> {
-                    // creates mapper and factory BIT REPRESENTATION
-                    mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, signals);
-                    UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                    factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
-                  }
-                  case "gaussian" -> {
-                    mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, signals);
-                    factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), nOfGaussians);
-                  }
-                  case "position" -> {
-                    // creates mapper and factory POSITION REPRESENTATION
-                    mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, signals);
-                    UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                    factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
-                  }
-                  case "positionGaussian" -> {
-                    mapper = new GaussianPositionMapper(true, nOfGaussians, width, height, sensors, true, innerNeurons, signals);
-                    factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
-                  }
-                  default -> throw new IllegalArgumentException("incorrect representation string");
-                }
-
-                // to evolve the robot
-                try {
-                  Stopwatch stopwatch = Stopwatch.createStarted();
-                  L.info(String.format("Starting %s", keys));
-
-                  // CREATES THE EVOLVER
-                  Evolver<List<Double>, Robot<?>, Double> evolver = new CMAESEvolver<>(
-                      mapper,
-                      factory,
-                      PartialComparator.from(Double.class).reversed().comparing(Individual::getFitness), // reversed is ABSOLUTELY NECESSARY i was minimizing instead of maximizing
-                      -1,
-                      1
-                  );
-
-                  //build main data collectors for listener saves things on .txt
-                  List<DataCollector<?, ? super Robot<?>, ? super Double>> collectors = new ArrayList<DataCollector<?, ? super Robot<?>, ? super Double>>(List.of(
-                      new Static(keys),
-                      new Basic(),
-                      new Population(),
-                      new Diversity(),
-                      new BestInfo("%5.2f"),
-                      // if deleted file stats does not have last 10 columns
-                      new FunctionOfOneBest<>(
-                          ((Function<Individual<?, ? extends Robot<?>, ? extends Double>, Robot<?>>) Individual::getSolution)
-                              .andThen(SerializationUtils::clone)
-                              .andThen(metrics(allMetrics, "training", trainingTask, "%6.2f"))
-                      ),
-                      // save number of effective voxel of the robot and effective height and effective width
-                      new FunctionOfOneBest<>(
-                          individual -> List.of(
-                              new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
-                              //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
-                              new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
-                              new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d")
-                          )
-                      )
+                  Map<String, String> keys = new TreeMap<>(Map.of(
+                      "seed", Integer.toString(seed),
+                      "terrain", terrainName,
+                      "controller", controller,
+                      "size", size,
+                      "sensor.config", sensorConfig,
+                      "representation", representation,
+                      "signals", signal
                   ));
-                  Listener<? super Object, ? super Robot<?>, ? super Double> listener;
-                  if (statsListenerFactory.getBaseFileName() == null) {
-                    listener = listener(collectors.toArray(DataCollector[]::new));
-                  } else {
-                    listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
-                  }
-                  if (serializedListenerFactory.getBaseFileName() != null) {
-                    listener = serializedListenerFactory.build(
-                        new Static(keys),
-                        new Basic(),
-                        new FunctionOfOneBest<>(i -> List.of(
-                            new Item("fitness.value", i.getFitness(), "%7.5f"),
-                            new Item("serialized.robot", Utils.safelySerialize(i.getSolution()), "%s"),
-                            new Item("serialized.genotype", Utils.safelySerialize((Serializable) i.getGenotype()), "%s")
-                        ))
-                    ).then(listener);
-                  }
-                  Collection<Robot<?>> solutions = evolver.solve( // here uses the evolver to solve the problem
-                      trainingTask.andThen(values -> values.get(allMetrics.indexOf(fitnessMetric))),
-                      new Births(nBirths),
-                      new Random(seed),
-                      executorService,
-                      Listener.onExecutor(
-                          listener,
-                          executorService
-                      )
-                  );
-                  L.info(String.format("Done %s: %d solutions in %4ds",
-                      keys,
-                      solutions.size(),
-                      stopwatch.elapsed(TimeUnit.SECONDS)
-                  ));
-
-/*
-                  // NEW PART ON VALIDATION
-                  //do validation
-                  for (int n = 0; n < numberOfValidations; n++) {
-                    for (int k = 0; k < typeOfValidations; k++) {
-                      //build validation task
-                      Function<Robot<?>, List<Double>> validationTask = new Locomotion(
+                  //problem to solve
+                  Function<Robot<?>, List<Double>> trainingTask = Misc.cached(
+                      new Locomotion(
                           episodeTime,
-                          Locomotion.createTerrain("flat"),
+                          Locomotion.createTerrain(terrainName),
                           allMetrics,
                           physicsSettings
-                      );
-                      validationTask = Utils.buildRobotTransformation("prova")
-                          .andThen(SerializationUtils::clone)
-                          .andThen(validationTask);
-                      List<Double> metrics = validationTask.apply(solutions.stream().findFirst().get());
-                      L.info(String.format(
-                          "Validation %s/%s of \"first\" best done",
-                          n,
-                          k
-                      ));
-                      try {
-                        List<Object> values = new ArrayList<>();
-                        values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
-                        values.addAll(List.of(numberOfValidations, typeOfValidations));
-                        //values.addAll(metrics);
-                        validationPrinter.printRecord(values);
-                        validationPrinter.flush();
-                      } catch (IOException e) {
-                        L.severe(String.format("Cannot save validation results due to %s", e));
-                      }
-                    }
+                      ), CACHE_SIZE);
+
+                  int width;
+                  int height;
+                  if (size.equals("5x5")) {
+                    width = 5;
+                    height = 5;
+                  } else if (size.equals("10x10")) {
+                    width = 10;
+                    height = 10;
+                  } else {
+                    throw new IllegalArgumentException("incorrect size string");
                   }
 
- */
+                  List<Sensor> sensors;  // list of sensors to use
+                  if (sensorConfig.equals("vel-area")) {
+                    // sensors the voxel should have
+                    sensors = List.of(
+                        new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
+                        new Normalization(new AreaRatio())
+                    );
+                  } else if (sensorConfig.equals("vel-area-touch")) {
+                    sensors = List.of(
+                        new Normalization(new Velocity(true, 5d, Velocity.Axis.X, Velocity.Axis.Y)),
+                        new Normalization(new AreaRatio()),
+                        new Normalization(new Average(new Touch(), 0.5)) // Eric said that it is better to add average with 0.5
+                    );
+                  } else {
+                    throw new IllegalArgumentException("incorrect sensor string");
+                  }
+                  boolean control;
+                  if (controller.equals("homogeneous")) {
+                    control = false;
+                  } else if (controller.equals("heterogeneous")) {
+                    control = true;
+                  } else {
+                    throw new IllegalArgumentException("incorrect controller string");
+                  }
 
-                } catch (Throwable e) {
-                  L.severe(String.format("Cannot complete %s due to %s",
-                      keys,
-                      e
-                  ));
-                  e.printStackTrace();
+                  int nOfSignals = switch (signal) {
+                    case "0" -> 0;
+                    case "1" -> 1;
+                    case "2" -> 2;
+                    case "4" -> 4;
+                    default -> throw new IllegalArgumentException("incorrect signal string");
+                  };
+
+                  // wow i used inheritance to create mapper and factory!
+                  Function<List<Double>, Robot<?>> mapper;
+                  IndependentFactory<List<Double>> factory;
+                  // creates mapper and factory GAUSSIAN REPRESENTATION
+                  switch (representation) {
+                    case "bit" -> {
+                      // creates mapper and factory BIT REPRESENTATION
+                      mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals);
+                      UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+                      factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
+                    }
+                    case "gaussian" -> {
+                      mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, nOfSignals);
+                      factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), nOfGaussians);
+                    }
+                    case "position" -> {
+                      // creates mapper and factory POSITION REPRESENTATION
+                      mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, nOfSignals);
+                      UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+                      factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
+                    }
+                    case "positionGaussian" -> {
+                      mapper = new GaussianPositionMapper(false, nOfGaussians, width, height, sensors, true, innerNeurons, nOfSignals);
+                      factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
+                    }
+                    default -> throw new IllegalArgumentException("incorrect representation string");
+                  }
+
+                  // to evolve the robot
+                  try {
+                    Stopwatch stopwatch = Stopwatch.createStarted();
+                    L.info(String.format("Starting %s", keys));
+
+                    // CREATES THE EVOLVER
+                    Evolver<List<Double>, Robot<?>, Double> evolver = new CMAESEvolver<>(
+                        mapper,
+                        factory,
+                        PartialComparator.from(Double.class).reversed().comparing(Individual::getFitness), // reversed is ABSOLUTELY NECESSARY i was minimizing instead of maximizing
+                        -1,
+                        1
+                    );
+
+                    //build main data collectors for listener saves things on .txt
+                    List<DataCollector<?, ? super Robot<?>, ? super Double>> collectors = new ArrayList<DataCollector<?, ? super Robot<?>, ? super Double>>(List.of(
+                        new Static(keys),
+                        new Basic(),
+                        new Population(),
+                        new Diversity(),
+                        new BestInfo("%5.2f"),
+                        // if deleted file stats does not have last 10 columns
+                        new FunctionOfOneBest<>(
+                            ((Function<Individual<?, ? extends Robot<?>, ? extends Double>, Robot<?>>) Individual::getSolution)
+                                .andThen(SerializationUtils::clone)
+                                .andThen(metrics(allMetrics, "training", trainingTask, "%6.2f"))
+                        ),
+                        // save number of effective voxel of the robot and effective height and effective width
+                        new FunctionOfOneBest<>(
+                            individual -> List.of(
+                                new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
+                                //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
+                                new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
+                                new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d"),
+                                new Item("robot.cropped.shape",
+                                    PrintBodies.toString(it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull), Objects::nonNull),
+                                    "%s")
+                                /*  // not normalized body
+                                new Item("robot.shape",
+                                    PrintBodies.toString(individual.getSolution().getVoxels(), Objects::nonNull),
+                                    "%s"),
+                                 */
+                            )
+                        )
+                    ));
+                    Listener<? super Object, ? super Robot<?>, ? super Double> listener;
+                    if (statsListenerFactory.getBaseFileName() == null) {
+                      listener = listener(collectors.toArray(DataCollector[]::new));
+                    } else {
+                      listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
+                    }
+                    if (serializedListenerFactory.getBaseFileName() != null) {
+                      listener = serializedListenerFactory.build(
+                          new Static(keys),
+                          new Basic(),
+                          new FunctionOfOneBest<>(i -> List.of(
+                              new Item("fitness.value", i.getFitness(), "%7.5f"),
+                              new Item("serialized.robot", Utils.safelySerialize(i.getSolution()), "%s"),
+                              new Item("serialized.genotype", Utils.safelySerialize((Serializable) i.getGenotype()), "%s")
+                          ))
+                      ).then(listener);
+                    }
+                    Collection<Robot<?>> solutions = evolver.solve( // here uses the evolver to solve the problem
+                        trainingTask.andThen(values -> values.get(allMetrics.indexOf(fitnessMetric))),
+                        new Births(nBirths),
+                        new Random(seed),
+                        executorService,
+                        Listener.onExecutor(
+                            listener,
+                            executorService
+                        )
+                    );
+                    L.info(String.format("Done %s: %d solutions in %4ds",
+                        keys,
+                        solutions.size(),
+                        stopwatch.elapsed(TimeUnit.SECONDS)
+                    ));
+
+
+
+
+                  } catch (Throwable e) {
+                    L.severe(String.format("Cannot complete %s due to %s",
+                        keys,
+                        e
+                    ));
+                    e.printStackTrace();
+                  }
                 }
               }
             }
