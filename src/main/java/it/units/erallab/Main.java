@@ -63,7 +63,7 @@ public class Main extends Worker {
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "200"));           // total number of births not robots
+    int nBirths = i(a("nBirths", "100"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
@@ -189,19 +189,22 @@ public class Main extends Worker {
                   };
 
 
-                  boolean control;
+                  boolean heterogeneous;
                   boolean position;
-                  if (controller.equals("homogeneous")) {
-                    control = false;
-                    position = false;
-                  } else if (controller.equals("heterogeneous")) {
-                    control = true;
-                    position = false;
-                  } else if (controller.equals("bit")) {
-                    control = false;
-                    position = true;
-                  } else {
-                    throw new IllegalArgumentException("incorrect controller string");
+                  switch (controller) {
+                    case "homogeneous" -> {
+                      heterogeneous = false;
+                      position = false;
+                    }
+                    case "heterogeneous" -> {
+                      heterogeneous = true;
+                      position = false;
+                    }
+                    case "position" -> {
+                      heterogeneous = false;
+                      position = true;
+                    }
+                    default -> throw new IllegalArgumentException("incorrect controller string");
                   }
 
                   // wow i used inheritance to create mapper and factory!
@@ -209,15 +212,15 @@ public class Main extends Worker {
                   IndependentFactory<List<Double>> factory;
                   switch (representation) {
                     case "bit" -> {
-                      mapper = new DoublePositionMapper(control, width, height, sensors, position, innerNeurons, 0);
-                      //mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals);
+                      mapper = new DoublePositionMapper(heterogeneous, width, height, sensors, position, innerNeurons, nOfSignals);
+                      //mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals); // old mapper
                       UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                      factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
+                      factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
                     }
                     case "gaussian" -> {
-                      mapper = new GaussianPositionMapper(control, nOfGaussians, width, height, sensors,position, innerNeurons, 1);
+                      mapper = new GaussianPositionMapper(heterogeneous, nOfGaussians, width, height, sensors, position, innerNeurons, nOfSignals);
                       //mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, nOfSignals);
-                      factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), nOfGaussians);
+                      factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
                     }
                     default -> throw new IllegalArgumentException("incorrect representation string");
                   }
@@ -242,6 +245,17 @@ public class Main extends Worker {
                               .andThen(org.apache.commons.lang3.SerializationUtils::clone)
                               .andThen(trainingTask)
                               .andThen(outcomeTransformer)
+                      ), // save number of effective voxel of the robot and effective height and effective width
+                      new FunctionOfOneBest<>(
+                          individual -> List.of(
+                              new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
+                              //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
+                              new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
+                              new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d"),
+                              new Item("robot.cropped.shape",
+                                  PrintBodies.toString(it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull), Objects::nonNull),
+                                  "%s")
+                          )
                       )
 
                   ));
@@ -300,7 +314,9 @@ public class Main extends Worker {
                             .andThen(validationTask);
 
 
-                        //validationTask = ModifyRobot.modifyRobot(k).andThen(org.apache.commons.lang3.SerializationUtils::clone).andThen(validationTask);
+                        validationTask = ValidateRobot.modifyRobot(k, solutions.stream().findFirst().get()).
+                            andThen(org.apache.commons.lang3.SerializationUtils::clone).
+                            andThen(validationTask);
 
 
                         Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
