@@ -1,3 +1,4 @@
+
 package it.units.erallab;
 
 import com.google.common.base.Stopwatch;
@@ -40,7 +41,6 @@ import java.util.stream.IntStream;
 
 import static it.units.malelab.jgea.core.util.Args.*;
 
-// mia versione
 public class Main extends Worker {
 
   public static final int CACHE_SIZE = 10000;
@@ -63,7 +63,7 @@ public class Main extends Worker {
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "10"));           // total number of births not robots
+    int nBirths = i(a("nBirths", "200"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
@@ -74,7 +74,8 @@ public class Main extends Worker {
     List<String> signals = l(a("signal", "1"));   // can be 0,1,2 or 4
 
     List<String> terrainNames = l(a("terrain", "flat"));
-    Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;  // changed was relative before
+
+    Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;
     Function<Outcome, List<Item>> outcomeTransformer = o -> DataCollector.fromBean(
         o,
         true,
@@ -94,6 +95,7 @@ public class Main extends Worker {
                 .collect(Collectors.joining("|"))
         )
     );
+    List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
 
     Settings physicsSettings = new Settings();
     //prepare file listeners
@@ -106,10 +108,26 @@ public class Main extends Worker {
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileSerialized", "serialized.txt")
     );
-
-
-    //shows params on log
-    // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in file. sh
+    CSVPrinter validationPrinter;
+    List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
+    try {
+      if (a("validationFile", null) != null) {
+        validationPrinter = new CSVPrinter(new FileWriter(
+            a("dir", ".") + File.separator + a("validationFile", null)
+        ), CSVFormat.DEFAULT.withDelimiter(';'));
+      } else {
+        validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
+      }
+      List<String> headers = new ArrayList<>();
+      headers.addAll(validationKeyHeaders);
+      headers.addAll(List.of("validation.transformation", "validation.terrain"));
+      headers.addAll(validationOutcomeHeaders.stream().map(n -> "validation." + n).collect(Collectors.toList()));
+      validationPrinter.printRecord(headers);
+    } catch (IOException e) {
+      L.severe(String.format("Cannot create printer for validation results due to %s", e));
+      return;
+    }
+    //summarize params
     L.info("Terrains: " + terrainNames);
     L.info("Controller: " + controllers);
     L.info("Size: " + sizes);
@@ -170,44 +188,39 @@ public class Main extends Worker {
                     default -> throw new IllegalArgumentException("incorrect signal string");
                   };
 
+
+                  boolean control;
+                  boolean position;
+                  if (controller.equals("homogeneous")) {
+                    control = false;
+                    position = false;
+                  } else if (controller.equals("heterogeneous")) {
+                    control = true;
+                    position = false;
+                  } else if (controller.equals("bit")) {
+                    control = false;
+                    position = true;
+                  } else {
+                    throw new IllegalArgumentException("incorrect controller string");
+                  }
+
                   // wow i used inheritance to create mapper and factory!
                   Function<List<Double>, Robot<?>> mapper;
                   IndependentFactory<List<Double>> factory;
-
-                  boolean control;
-                  switch (controller) {
-                    case "homogeneous" -> control = false;
-                    case "heterogeneous" -> control = true;
-                    /*
-                    case "position" -> {
-                      control = false;
-                      mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, nOfSignals);
-                      UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                      factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
-                    }
-                    case "positionGaussian" -> {
-                      control = false;
-                      mapper = new GaussianPositionMapper(control, nOfGaussians, width, height, sensors, true, innerNeurons, nOfSignals);
-                      factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
-                    }
-
-                     */
-                    default -> throw new IllegalArgumentException("incorrect controller string");
-                  }
-
                   switch (representation) {
                     case "bit" -> {
-                      mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals);
+                      mapper = new DoublePositionMapper(control, width, height, sensors, position, innerNeurons, 0);
+                      //mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals);
                       UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
                       factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
                     }
                     case "gaussian" -> {
-                      mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, nOfSignals);
+                      mapper = new GaussianPositionMapper(control, nOfGaussians, width, height, sensors,position, innerNeurons, 1);
+                      //mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, nOfSignals);
                       factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), nOfGaussians);
                     }
                     default -> throw new IllegalArgumentException("incorrect representation string");
                   }
-
 
                   //build training task
                   Function<Robot<?>, Outcome> trainingTask = Misc.cached(
@@ -229,19 +242,8 @@ public class Main extends Worker {
                               .andThen(org.apache.commons.lang3.SerializationUtils::clone)
                               .andThen(trainingTask)
                               .andThen(outcomeTransformer)
-                      ),
-                      // save number of effective voxel of the robot and effective height and effective width
-                      new FunctionOfOneBest<>(
-                          individual -> List.of(
-                              new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
-                              //new Item("robot.size", individual.getSolution().getVoxels().stream().filter(Objects::nonNull).count(), "%2d"), // gives always width*height
-                              new Item("robot.width", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getW(), "%2d"),
-                              new Item("robot.height", it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull).getH(), "%2d"),
-                              new Item("robot.cropped.shape",
-                                  PrintBodies.toString(it.units.erallab.hmsrobots.util.Utils.cropGrid(individual.getSolution().getVoxels(), Objects::nonNull), Objects::nonNull),
-                                  "%s")
-                          )
                       )
+
                   ));
                   Listener<? super Object, ? super Robot<?>, ? super Double> listener;
                   if (statsListenerFactory.getBaseFileName() == null) {
@@ -263,8 +265,6 @@ public class Main extends Worker {
                   try {
                     Stopwatch stopwatch = Stopwatch.createStarted();
                     L.info(String.format("Starting %s", keys));
-
-                    // CREATES THE EVOLVER
                     Evolver<?, Robot<?>, Double> evolver = new CMAESEvolver<>(
                         mapper,
                         factory,
@@ -272,7 +272,7 @@ public class Main extends Worker {
                     );
                     //optimize
                     Collection<Robot<?>> solutions = evolver.solve(
-                        trainingTask.andThen(fitnessFunction),
+                        trainingTask.andThen(fitnessFunction),  // this should be ok
                         new Births(nBirths),
                         random,
                         executorService,
@@ -287,11 +287,43 @@ public class Main extends Worker {
                         stopwatch.elapsed(TimeUnit.SECONDS)
                     ));
 
+                    for (int n = 0; n <= numberOfValidations; n++) {
+                      for (int k = 0; k <= sizeOfvalidation; k++) {
+                        Function<Robot<?>, Outcome> validationTask = new Locomotion(
+                            episodeTime,
+                            Locomotion.createTerrain("flat"),
+                            physicsSettings
+                        );
+
+                        validationTask = Utils.buildRobotTransformation("identity")  // change this
+                            .andThen(org.apache.commons.lang3.SerializationUtils::clone)
+                            .andThen(validationTask);
 
 
+                        //validationTask = ModifyRobot.modifyRobot(k).andThen(org.apache.commons.lang3.SerializationUtils::clone).andThen(validationTask);
 
 
-
+                        Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
+                        try {
+                          List<Object> values = new ArrayList<>();
+                          values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
+                          values.addAll(List.of(n, k));
+                          List<Item> validationItems = outcomeTransformer.apply(validationOutcome);
+                          values.addAll(validationOutcomeHeaders.stream()
+                              .map(l -> validationItems.stream()
+                                  .filter(i -> i.getName().equals(l))
+                                  .map(Item::getValue)
+                                  .findFirst()
+                                  .orElse(null))
+                              .collect(Collectors.toList())
+                          );
+                          validationPrinter.printRecord(values);
+                          validationPrinter.flush();
+                        } catch (IOException e) {
+                          L.severe(String.format("Cannot save validation results due to %s", e));
+                        }
+                      }
+                    }
                   } catch (InterruptedException | ExecutionException e) {
                     L.severe(String.format("Cannot complete %s due to %s",
                         keys,
@@ -306,12 +338,21 @@ public class Main extends Worker {
         }
       }
     }
+    try {
+      validationPrinter.close(true);
+    } catch (IOException e) {
+      L.severe(String.format("Cannot close printer for validation results due to %s", e));
+    }
   }
+
 
   private static Outcome prototypeOutcome() {
     return new Outcome(
         0d, 10d, 0d, 0d, 0d,
-        new TreeMap<>(Map.of(0d, Point2.build(0d, 0d))),
+        new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
+            i -> (double) i / 10d,
+            i -> Point2.build(Math.sin((double) i / 10d), Math.sin((double) i / 5d))
+        ))),
         new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
             i -> (double) i / 10d,
             i -> new Footprint(new boolean[]{true, false, true}))
@@ -319,4 +360,5 @@ public class Main extends Worker {
         new TreeMap<>(Map.of(0d, Grid.create(1, 1, true)))
     );
   }
+
 }

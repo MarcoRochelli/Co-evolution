@@ -77,7 +77,7 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
     int c = 0;
     Grid<Boolean> shape = Grid.create(width, height);
     for (double entry : genotype) {
-      if (c < width * height) {  // < or <= ? < is correct
+      if (c < width * height) {
         if (entry > THRESHOLD) {
           shape.set(c % width, c / width, true);
         } else {
@@ -86,23 +86,31 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
         c = c + 1;
       }
     }
-    if (shape.values().stream().noneMatch(b -> b)) { // better way to check if the grid is empty
+    if (shape.values().stream().noneMatch(b -> b)) { // checks if the grid is empty
       shape = Grid.create(1, 1, true);
     }
 
-    Grid<SensingVoxel> body = Grid.create(width, height,
-        (x, y) -> new SensingVoxel(
-            Stream.concat(
-                sensors.stream().map(SerializationUtils::clone),
-                List.of(
-                    new Constant( // i create a new sensor
-                        new double[]{(double)x / (double)width, (double)y / (double)height}, // and i pass it its normalized position
-                        new Sensor.Domain[]{Sensor.Domain.of(0, 1), Sensor.Domain.of(0, 1)}
-                    )
-                ).stream()
-            ).collect(Collectors.toList())
-        )
-    );
+    Grid<SensingVoxel> body;
+    if (hasPositionSensor) { // voxels have also position sensor
+      body = Grid.create(width, height,
+          (x, y) -> new SensingVoxel(
+              Stream.concat(
+                  sensors.stream().map(SerializationUtils::clone),
+                  List.of(
+                      new Constant( // i create a new sensor
+                          new double[]{(double) x / (double) width, (double) y / (double) height}, // and i pass it its normalized position
+                          new Sensor.Domain[]{Sensor.Domain.of(0, 1), Sensor.Domain.of(0, 1)}
+                      )
+                  ).stream()
+              ).collect(Collectors.toList())
+          )
+      );
+    } else {
+      SensingVoxel sensingVoxel = new SensingVoxel(sensors);
+      body = Grid.create(width, height,
+          (x, y) ->  SerializationUtils.clone(sensingVoxel)
+      );
+    }
 
     for (Grid.Entry<Boolean> entry : shape){ // links shape with body
       if (!entry.getValue()){
@@ -172,9 +180,9 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
 
-    DoublePositionMapper mapper = new DoublePositionMapper(true, 10, 10, sensors,true, innerNeurons, 0);
+    DoublePositionMapper mapper = new DoublePositionMapper(false, 10, 10, sensors,true, innerNeurons, 0);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-    System.out.println("genotype length: " + mapper.getGenotypeSize()); // to know genotype size
+    //System.out.println("genotype length: " + mapper.getGenotypeSize()); // to know genotype size
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
     List<Double> genotype = factory.build(random);
     Robot<?> robot = mapper.apply(genotype);

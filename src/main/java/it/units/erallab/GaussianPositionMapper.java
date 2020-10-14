@@ -117,19 +117,27 @@ public class GaussianPositionMapper implements Function<List<Double>, Robot<?>> 
       shape = Grid.create(1, 1, true);
     }
 
-    Grid<SensingVoxel> body = Grid.create(width, height,
-        (x, y) -> new SensingVoxel(
-            Stream.concat(
-                sensors.stream().map(SerializationUtils::clone),
-                List.of(
-                    new Constant( // i create a new sensor
-                        new double[]{(double)x / (double)width, (double)y / (double)height}, // and i pass it its normalized position
-                        new Sensor.Domain[]{Sensor.Domain.of(0, 1), Sensor.Domain.of(0, 1)}
-                    )
-                ).stream()
-            ).collect(Collectors.toList())
-        )
-    );
+    Grid<SensingVoxel> body;
+    if (hasPositionSensor) { // voxels have also position sensor
+      body = Grid.create(width, height,
+          (x, y) -> new SensingVoxel(
+              Stream.concat(
+                  sensors.stream().map(SerializationUtils::clone),
+                  List.of(
+                      new Constant( // i create a new sensor
+                          new double[]{(double) x / (double) width, (double) y / (double) height}, // and i pass it its normalized position
+                          new Sensor.Domain[]{Sensor.Domain.of(0, 1), Sensor.Domain.of(0, 1)}
+                      )
+                  ).stream()
+              ).collect(Collectors.toList())
+          )
+      );
+    } else {
+      SensingVoxel sensingVoxel = new SensingVoxel(sensors);
+      body = Grid.create(width, height,
+          (x, y) ->  SerializationUtils.clone(sensingVoxel)
+      );
+    }
 
     for (Grid.Entry<Boolean> entry : shape){ // links shape with body
       if (!entry.getValue()){
@@ -197,7 +205,7 @@ public class GaussianPositionMapper implements Function<List<Double>, Robot<?>> 
     );
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
 
-    GaussianPositionMapper mapper = new GaussianPositionMapper(true, 5, 10, 10, sensors,true, innerNeurons, 1);
+    GaussianPositionMapper mapper = new GaussianPositionMapper(false, 5, 10, 10, sensors,true, innerNeurons, 1);
     //System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
 
     GaussianFactory<Double> factory = new GaussianFactory<>(mapper.getGenotypeSize(), 5);

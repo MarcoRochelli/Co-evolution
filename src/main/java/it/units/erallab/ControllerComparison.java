@@ -138,13 +138,14 @@ public class ControllerComparison extends Worker {
     }
     Settings physicsSettings = new Settings();
     //prepare file listeners
-    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>(
-        a("dir", "."),
-        a("statsFile", null)
+    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
+        a("dir", "C:\\Users\\marco\\Desktop")),
+        a("fileStats", "stats.txt")
     );
-    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>(
-        a("dir", "."),
-        a("serializedFile", null)
+
+    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
+        a("dir", "C:\\Users\\marco\\Desktop")),
+        a("fileSerialized", "serialized.txt")
     );
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");

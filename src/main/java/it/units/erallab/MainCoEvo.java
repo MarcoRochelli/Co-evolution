@@ -63,7 +63,7 @@ public class MainCoEvo extends Worker {
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
     double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
-    int nBirths = i(a("nBirths", "10"));           // total number of births not robots
+    int nBirths = i(a("nBirths", "200"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
     // THINGS I ADDED
@@ -74,6 +74,7 @@ public class MainCoEvo extends Worker {
     List<String> signals = l(a("signal", "1"));   // can be 0,1,2 or 4
 
     List<String> terrainNames = l(a("terrain", "flat"));
+
     Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;  // changed was relative before
     Function<Outcome, List<Item>> outcomeTransformer = o -> DataCollector.fromBean(
         o,
@@ -112,7 +113,7 @@ public class MainCoEvo extends Worker {
     //List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver"); // old
     List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensors.config", "representation", "signals");
     try {
-      if (a("validationFile", "validation.txt") != null) {
+      if (a("validationFile", "validation.txt") != null) {  // change this befor putting it on cluster
         validationPrinter = new CSVPrinter(new FileWriter(
             a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
         ), CSVFormat.DEFAULT.withDelimiter(';'));
@@ -121,6 +122,7 @@ public class MainCoEvo extends Worker {
       }
       List<String> headers = new ArrayList<>();
       headers.addAll(validationKeyHeaders);
+      headers.addAll(List.of("validation.run", "validation.size"));
       headers.addAll(validationOutcomeHeaders.stream().map(n -> "validation." + n).collect(Collectors.toList()));
       validationPrinter.printRecord(headers);
     } catch (IOException e) {
@@ -347,9 +349,6 @@ public class MainCoEvo extends Worker {
                         }
                       }
                     }
-
-
-
                   } catch (InterruptedException | ExecutionException e) {
                     L.severe(String.format("Cannot complete %s due to %s",
                         keys,
