@@ -1,4 +1,3 @@
-
 package it.units.erallab;
 
 import com.google.common.base.Stopwatch;
@@ -10,7 +9,6 @@ import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
 import it.units.erallab.hmsrobots.tasks.locomotion.Outcome;
 import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Point2;
-import it.units.erallab.hmsrobots.util.Utils;
 import it.units.malelab.jgea.Worker;
 import it.units.malelab.jgea.core.IndependentFactory;
 import it.units.malelab.jgea.core.Individual;
@@ -97,20 +95,19 @@ public class Main extends Worker {
     );
     List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
 
-
     Settings physicsSettings = new Settings();
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileStats", "stats.txt")
     );
-
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileSerialized", "serialized.txt")
     );
+
     CSVPrinter validationPrinter;
-    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensors.config", "representation", "signals");
+    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensor.config", "representation", "signals");
     try {
       if (a("validationFile", "validation.txt") != null) {  // change this befor putting it on cluster
         validationPrinter = new CSVPrinter(new FileWriter(
@@ -123,9 +120,6 @@ public class Main extends Worker {
       headers.addAll(validationKeyHeaders);
       headers.addAll(List.of("validation.run", "validation.size"));
       headers.addAll(validationOutcomeHeaders.stream().map(n -> "validation." + n).collect(Collectors.toList()));
-
-      System.out.println("NOMI COLONNE VALIDATION" + headers); // FITNESS IS MISSING
-
       validationPrinter.printRecord(headers);
     } catch (IOException e) {
       L.severe(String.format("Cannot create printer for validation results due to %s", e));
@@ -245,19 +239,12 @@ public class Main extends Worker {
                       new Population(),
                       new Diversity(),
                       new BestInfo("%5.2f"),
-
-
-
-                      // this is not working###############################################################################################################
                       new FunctionOfOneBest<>(
                           ((Function<Individual<?, ? extends Robot<SensingVoxel>, ? extends Double>, Robot<SensingVoxel>>) Individual::getSolution)
                               .andThen(org.apache.commons.lang3.SerializationUtils::clone)
                               .andThen(trainingTask)
                               .andThen(outcomeTransformer)
                       ),
-
-
-
                       // save number of effective voxel of the robot and effective height and effective width
                       new FunctionOfOneBest<>(
                           individual -> List.of(
@@ -321,9 +308,12 @@ public class Main extends Worker {
                             physicsSettings
                         );
 
-                        validationTask = ValidateRobot.modifyRobot(k, solutions.stream().findFirst().get()).
-                            andThen(org.apache.commons.lang3.SerializationUtils::clone).
-                            andThen(validationTask);
+                        int finalK = k;
+                        int finalN = n;
+
+                        validationTask = ((Function<Robot<?>, Robot<?>>) org.apache.commons.lang3.SerializationUtils::clone)
+                            .andThen(r -> RobotUtils.modifyRobot(r, finalK, finalN))
+                            .andThen(validationTask);
 
                         L.info(String.format(
                             "Validation %s/%s of \"first\" best done",
@@ -333,18 +323,10 @@ public class Main extends Worker {
 
                         Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
 
-
                         try {
                           List<Object> values = new ArrayList<>();
                           values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
                           values.addAll(List.of(n, k));
-
-
-
-
-
-
-                          //this is not working same error as above plus not everything is saved########################################################
                           List<Item> validationItems = outcomeTransformer.apply(validationOutcome);
                           values.addAll(validationOutcomeHeaders.stream()
                               .map(l -> validationItems.stream()
@@ -354,12 +336,6 @@ public class Main extends Worker {
                                   .orElse(null))
                               .collect(Collectors.toList())
                           );
-
-
-
-
-
-
 
                           validationPrinter.printRecord(values);
                           validationPrinter.flush();
@@ -389,7 +365,6 @@ public class Main extends Worker {
       L.severe(String.format("Cannot close printer for validation results due to %s", e));
     }
   }
-
 
   private static Outcome prototypeOutcome() {
     return new Outcome(

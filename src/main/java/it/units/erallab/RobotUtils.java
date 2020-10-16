@@ -1,5 +1,7 @@
 package it.units.erallab;
 
+import it.units.erallab.hmsrobots.core.controllers.PhaseSin;
+import it.units.erallab.hmsrobots.core.objects.ControllableVoxel;
 import it.units.erallab.hmsrobots.core.objects.Robot;
 import it.units.erallab.hmsrobots.core.objects.SensingVoxel;
 import it.units.erallab.hmsrobots.util.Grid;
@@ -10,25 +12,19 @@ import java.util.Objects;
 import java.util.Random;
 import java.util.function.UnaryOperator;
 
-public class ValidateRobot {
+public class RobotUtils {
 
-  public static UnaryOperator<Robot<?>> modifyRobot(int nOfModifications, Robot robot) {
-    Random random = new Random();
-
+  public static <V extends ControllableVoxel> Robot<V> modifyRobot(Robot<V> robot, int nOfModifications, long seed) {
+    Random random = new Random(seed);
     int numberOfVoxels = (int) robot.getVoxels().count(Objects::nonNull);
-    int effectiveDamage = nOfModifications * numberOfVoxels / 100 * 15;
+    int effectiveDamage = (int) (nOfModifications * ((double) numberOfVoxels / 100d * 10d)); // take care i forgot type cast and was integer division
 
-    Grid<SensingVoxel> body = robot.getVoxels();
-    Grid<SensingVoxel> modifiedBody = robot.getVoxels();
+    Grid<? extends V> body = robot.getVoxels();
+    Grid<V> modifiedBody = Grid.create(body, v -> v);
+    V sensingVoxel = body.values().stream().filter(Objects::nonNull).findFirst().get(); // initializes sensing voxel copying a random voxel
 
-    SensingVoxel sensingVoxel = null; // initializes sensing voxel copying a random voxel
-    while (sensingVoxel == null) {
-      int w = random.nextInt(robot.getVoxels().getW());
-      int h = random.nextInt(robot.getVoxels().getH());
-      sensingVoxel = body.get(w, h);
-    }
-
-    for (int damage = 1; damage < effectiveDamage; damage++) {
+    int nOfEffectiveModifications = 0;
+    while (nOfEffectiveModifications < effectiveDamage) {
       boolean add = random.nextBoolean();
       int x = random.nextInt(robot.getVoxels().getW());
       int y = random.nextInt(robot.getVoxels().getH());
@@ -36,7 +32,7 @@ public class ValidateRobot {
       // if i have to add and that voxel is empty add and increase damage
       if (add && modifiedBody.get(x, y) == null) {
         modifiedBody.set(x, y, SerializationUtils.clone(sensingVoxel));
-        damage++;
+        nOfEffectiveModifications++;
       }
       // if i have to remove and that voxel is not empty try to remove
       else if (!add && modifiedBody.get(x, y) != null) {
@@ -45,29 +41,32 @@ public class ValidateRobot {
 
         // calculate new dimension of grid
         modifiedBody = Utils.gridLargestConnected(modifiedBody, Objects::nonNull);
-        for (Grid.Entry<SensingVoxel> entry : modifiedBody) {
-          if (entry.getValue() == null) {
-            modifiedBody.set(entry.getX(), entry.getY(), null);
-          }
-        }
-        int actualSize = (int) modifiedBody.count(Objects::nonNull);
+
+        int currentSize = (int) modifiedBody.count(Objects::nonNull);
         // if new grid is only one voxel smaller than previous one ok go on
-        if (actualSize != previousSize - 1) {
-          damage++;
+        if (currentSize == previousSize - 1) {
+          nOfEffectiveModifications++;
         } else { // robot is broken in two so do not remove voxel
           modifiedBody.set(x, y, SerializationUtils.clone(sensingVoxel));
         }
       }
     }
-
     // return robot with the new body
-    Grid<SensingVoxel> finalModifiedBody = modifiedBody;
-    return newRobot -> new Robot<>(
-        ((Robot<SensingVoxel>) robot).getController(),
-        finalModifiedBody
-        );
+    return new Robot<V>(
+        robot.getController(), // check also grid of controller
+        modifiedBody // maybe i have to write here a lambda or something  but how??  PROBLEM IS HERE
+    );
   }
+
+  public static void main(String[] args) {
+
+    Robot<ControllableVoxel> robot = new Robot<>(
+        new PhaseSin(1, 1, Grid.create(5, 5, 0d)),
+        Grid.create(5, 5, (x, y) -> (x == 3) ? new ControllableVoxel() : null)
+    );
+
+    modifyRobot(robot, 4, 1);
+
+  }
+
 }
-
-
-
