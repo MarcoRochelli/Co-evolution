@@ -100,7 +100,7 @@ public class ControllerComparison extends Worker {
   @Override
   public void run() {
     double episodeTime = d(a("episodeT", "10.0"));
-    int nBirths = i(a("nBirths", "500"));
+    int nBirths = i(a("nBirths", "100"));
     int[] seeds = ri(a("seed", "0:1"));
     List<String> terrainNames = l(a("terrain", "flat"));
     List<String> evolverMapperNames = l(a("evolver", "mlp-0.65-cmaes"));
@@ -150,9 +150,9 @@ public class ControllerComparison extends Worker {
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
     try {
-      if (a("validationFile", null) != null) {
+      if (a("validationFile", "validation.txt") != null) {  // change this befor putting it on cluster
         validationPrinter = new CSVPrinter(new FileWriter(
-            a("dir", ".") + File.separator + a("validationFile", null)
+            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
         ), CSVFormat.DEFAULT.withDelimiter(';'));
       } else {
         validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));

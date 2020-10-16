@@ -62,7 +62,7 @@ public class Main extends Worker {
     final int nOfGaussians = 5;
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
-    double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
+    double episodeTime = d(a("episodeT", "10.0"));  // length of simulation
     int nBirths = i(a("nBirths", "100"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));            // number of runs
 
@@ -97,6 +97,7 @@ public class Main extends Worker {
     );
     List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
 
+
     Settings physicsSettings = new Settings();
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
@@ -109,24 +110,28 @@ public class Main extends Worker {
         a("fileSerialized", "serialized.txt")
     );
     CSVPrinter validationPrinter;
-    List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
+    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensors.config", "representation", "signals");
     try {
-      if (a("validationFile", null) != null) {
+      if (a("validationFile", "validation.txt") != null) {  // change this befor putting it on cluster
         validationPrinter = new CSVPrinter(new FileWriter(
-            a("dir", ".") + File.separator + a("validationFile", null)
+            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
         ), CSVFormat.DEFAULT.withDelimiter(';'));
       } else {
         validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
       }
       List<String> headers = new ArrayList<>();
       headers.addAll(validationKeyHeaders);
-      headers.addAll(List.of("validation.transformation", "validation.terrain"));
+      headers.addAll(List.of("validation.run", "validation.size"));
       headers.addAll(validationOutcomeHeaders.stream().map(n -> "validation." + n).collect(Collectors.toList()));
+
+      System.out.println("NOMI COLONNE VALIDATION" + headers); // FITNESS IS MISSING
+
       validationPrinter.printRecord(headers);
     } catch (IOException e) {
       L.severe(String.format("Cannot create printer for validation results due to %s", e));
       return;
     }
+
     //summarize params
     L.info("Terrains: " + terrainNames);
     L.info("Controller: " + controllers);
@@ -240,12 +245,20 @@ public class Main extends Worker {
                       new Population(),
                       new Diversity(),
                       new BestInfo("%5.2f"),
+
+
+
+                      // this is not working###############################################################################################################
                       new FunctionOfOneBest<>(
                           ((Function<Individual<?, ? extends Robot<SensingVoxel>, ? extends Double>, Robot<SensingVoxel>>) Individual::getSolution)
                               .andThen(org.apache.commons.lang3.SerializationUtils::clone)
                               .andThen(trainingTask)
                               .andThen(outcomeTransformer)
-                      ), // save number of effective voxel of the robot and effective height and effective width
+                      ),
+
+
+
+                      // save number of effective voxel of the robot and effective height and effective width
                       new FunctionOfOneBest<>(
                           individual -> List.of(
                               new Item("robot.size", individual.getSolution().getVoxels().count(Objects::nonNull), "%2d"),
@@ -257,16 +270,15 @@ public class Main extends Worker {
                                   "%s")
                           )
                       )
-
                   ));
                   Listener<? super Object, ? super Robot<?>, ? super Double> listener;
                   if (statsListenerFactory.getBaseFileName() == null) {
                     listener = listener(collectors.toArray(DataCollector[]::new));
                   } else {
-                    listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
+                    listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new)); // file stats
                   }
                   if (serializedListenerFactory.getBaseFileName() != null) {
-                    listener = serializedListenerFactory.build(
+                    listener = serializedListenerFactory.build(   // file serialized
                         new Static(keys),
                         new Basic(),
                         new FunctionOfOneBest<>(i -> List.of(
@@ -301,29 +313,38 @@ public class Main extends Worker {
                         stopwatch.elapsed(TimeUnit.SECONDS)
                     ));
 
-                    for (int n = 0; n <= numberOfValidations; n++) {
-                      for (int k = 0; k <= sizeOfvalidation; k++) {
+                    for (int n = 1; n <= numberOfValidations; n++) {
+                      for (int k = 1; k <= sizeOfvalidation; k++) {
                         Function<Robot<?>, Outcome> validationTask = new Locomotion(
                             episodeTime,
                             Locomotion.createTerrain("flat"),
                             physicsSettings
                         );
 
-                        validationTask = Utils.buildRobotTransformation("identity")  // change this
-                            .andThen(org.apache.commons.lang3.SerializationUtils::clone)
-                            .andThen(validationTask);
-
-
                         validationTask = ValidateRobot.modifyRobot(k, solutions.stream().findFirst().get()).
                             andThen(org.apache.commons.lang3.SerializationUtils::clone).
                             andThen(validationTask);
 
+                        L.info(String.format(
+                            "Validation %s/%s of \"first\" best done",
+                            n,
+                            k
+                        ));
 
                         Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
+
+
                         try {
                           List<Object> values = new ArrayList<>();
                           values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
                           values.addAll(List.of(n, k));
+
+
+
+
+
+
+                          //this is not working same error as above plus not everything is saved########################################################
                           List<Item> validationItems = outcomeTransformer.apply(validationOutcome);
                           values.addAll(validationOutcomeHeaders.stream()
                               .map(l -> validationItems.stream()
@@ -333,11 +354,19 @@ public class Main extends Worker {
                                   .orElse(null))
                               .collect(Collectors.toList())
                           );
+
+
+
+
+
+
+
                           validationPrinter.printRecord(values);
                           validationPrinter.flush();
                         } catch (IOException e) {
                           L.severe(String.format("Cannot save validation results due to %s", e));
                         }
+
                       }
                     }
                   } catch (InterruptedException | ExecutionException e) {
