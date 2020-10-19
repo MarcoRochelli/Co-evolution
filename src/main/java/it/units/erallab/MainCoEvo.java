@@ -9,7 +9,6 @@ import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
 import it.units.erallab.hmsrobots.tasks.locomotion.Outcome;
 import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Point2;
-import it.units.erallab.hmsrobots.util.Utils;
 import it.units.malelab.jgea.Worker;
 import it.units.malelab.jgea.core.IndependentFactory;
 import it.units.malelab.jgea.core.Individual;
@@ -40,7 +39,6 @@ import java.util.stream.IntStream;
 
 import static it.units.malelab.jgea.core.util.Args.*;
 
-// mia versione
 public class MainCoEvo extends Worker {
 
   public static final int CACHE_SIZE = 10000;
@@ -62,20 +60,20 @@ public class MainCoEvo extends Worker {
     final int nOfGaussians = 5;
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
-    double episodeTime = d(a("episodeT", "2.0"));  // length of simulation
+    double episodeTime = d(a("episodeT", "10.0"));   // length of simulation
     int nBirths = i(a("nBirths", "200"));           // total number of births not robots
-    int[] seeds = ri(a("seed", "0:1"));            // number of runs
+    int[] seeds = ri(a("seed", "0:1"));             // number of runs
 
     // THINGS I ADDED
     List<String> sizes = l(a("sizes", "5x5")); //5x5 or 10x10
-    List<String> controllers = l(a("controllers", "homogeneous"));  // homogenous,heterogeneous or position
-    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area")); // vel-area or vel-area-touch
+    List<String> controllers = l(a("controllers", "homogeneous,heterogeneous,position"));  // homogenous,heterogeneous or position
+    List<String> sensorsConfig = l(a("sensorsConfig", "vel-area-touch")); // vel-area or vel-area-touch
     List<String> representations = l(a("representation", "bit"));   // bit or gaussian
     List<String> signals = l(a("signal", "1"));   // can be 0,1,2 or 4
 
     List<String> terrainNames = l(a("terrain", "flat"));
 
-    Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;  // changed was relative before
+    Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;
     Function<Outcome, List<Item>> outcomeTransformer = o -> DataCollector.fromBean(
         o,
         true,
@@ -103,15 +101,13 @@ public class MainCoEvo extends Worker {
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileStats", "stats.txt")
     );
-
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileSerialized", "serialized.txt")
     );
 
     CSVPrinter validationPrinter;
-    //List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver"); // old
-    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensors.config", "representation", "signals");
+    List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensor.config", "representation", "signals");
     try {
       if (a("validationFile", "validation.txt") != null) {  // change this befor putting it on cluster
         validationPrinter = new CSVPrinter(new FileWriter(
@@ -129,8 +125,8 @@ public class MainCoEvo extends Worker {
       L.severe(String.format("Cannot create printer for validation results due to %s", e));
       return;
     }
-    //shows params on log
-    // L.info("number of processors "+Runtime.getRuntime().availableProcessors()); // gives the number of processors to put in file. sh
+
+    //summarize params
     L.info("Terrains: " + terrainNames);
     L.info("Controller: " + controllers);
     L.info("Size: " + sizes);
@@ -191,44 +187,42 @@ public class MainCoEvo extends Worker {
                     default -> throw new IllegalArgumentException("incorrect signal string");
                   };
 
-                  // wow i used inheritance to create mapper and factory!
-                  Function<List<Double>, Robot<?>> mapper;
-                  IndependentFactory<List<Double>> factory;
 
-                  boolean control;
+                  boolean heterogeneous;
+                  boolean position;
                   switch (controller) {
-                    case "homogeneous" -> control = false;
-                    case "heterogeneous" -> control = true;
-                    /*
+                    case "homogeneous" -> {
+                      heterogeneous = false;
+                      position = false;
+                    }
+                    case "heterogeneous" -> {
+                      heterogeneous = true;
+                      position = false;
+                    }
                     case "position" -> {
-                      control = false;
-                      mapper = new DoublePositionMapper(control, width, height, sensors, true, innerNeurons, nOfSignals);
-                      UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                      factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
+                      heterogeneous = false;
+                      position = true;
                     }
-                    case "positionGaussian" -> {
-                      control = false;
-                      mapper = new GaussianPositionMapper(control, nOfGaussians, width, height, sensors, true, innerNeurons, nOfSignals);
-                      factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
-                    }
-
-                     */
                     default -> throw new IllegalArgumentException("incorrect controller string");
                   }
 
+                  // wow i used inheritance to create mapper and factory!
+                  Function<List<Double>, Robot<?>> mapper;
+                  IndependentFactory<List<Double>> factory;
                   switch (representation) {
                     case "bit" -> {
-                      mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals);
+                      mapper = new DoublePositionMapper(heterogeneous, width, height, sensors, position, innerNeurons, nOfSignals);
+                      //mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals); // old mapper
                       UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                      factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
+                      factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
                     }
                     case "gaussian" -> {
-                      mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, nOfSignals);
-                      factory = new GaussianFactory<>(((GaussianMapper) mapper).getGenotypeSize(), nOfGaussians);
+                      mapper = new GaussianPositionMapper(heterogeneous, nOfGaussians, width, height, sensors, position, innerNeurons, nOfSignals);
+                      //mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, nOfSignals);
+                      factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
                     }
                     default -> throw new IllegalArgumentException("incorrect representation string");
                   }
-
 
                   //build training task
                   Function<Robot<?>, Outcome> trainingTask = Misc.cached(
@@ -268,10 +262,10 @@ public class MainCoEvo extends Worker {
                   if (statsListenerFactory.getBaseFileName() == null) {
                     listener = listener(collectors.toArray(DataCollector[]::new));
                   } else {
-                    listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
+                    listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new)); // file stats
                   }
                   if (serializedListenerFactory.getBaseFileName() != null) {
-                    listener = serializedListenerFactory.build(
+                    listener = serializedListenerFactory.build(   // file serialized
                         new Static(keys),
                         new Basic(),
                         new FunctionOfOneBest<>(i -> List.of(
@@ -284,8 +278,6 @@ public class MainCoEvo extends Worker {
                   try {
                     Stopwatch stopwatch = Stopwatch.createStarted();
                     L.info(String.format("Starting %s", keys));
-
-                    // CREATES THE EVOLVER
                     Evolver<?, Robot<?>, Double> evolver = new CMAESEvolver<>(
                         mapper,
                         factory,
@@ -293,7 +285,7 @@ public class MainCoEvo extends Worker {
                     );
                     //optimize
                     Collection<Robot<?>> solutions = evolver.solve(
-                        trainingTask.andThen(fitnessFunction),
+                        trainingTask.andThen(fitnessFunction),  // this should be ok
                         new Births(nBirths),
                         random,
                         executorService,
@@ -308,27 +300,29 @@ public class MainCoEvo extends Worker {
                         stopwatch.elapsed(TimeUnit.SECONDS)
                     ));
 
-
-                    //do validation
-
-                    for (int n = 0; n <= numberOfValidations; n++) {
-                      for (int k = 0; k <= sizeOfvalidation; k++) {
+                    for (int n = 1; n <= numberOfValidations; n++) {
+                      for (int k = 1; k <= sizeOfvalidation; k++) {
                         Function<Robot<?>, Outcome> validationTask = new Locomotion(
                             episodeTime,
                             Locomotion.createTerrain("flat"),
                             physicsSettings
                         );
 
-                        validationTask = Utils.buildRobotTransformation("identity")  // change this
-                            .andThen(org.apache.commons.lang3.SerializationUtils::clone)
+                        int finalK = k;
+                        int finalN = n;
+
+                        validationTask = ((Function<Robot<?>, Robot<?>>) org.apache.commons.lang3.SerializationUtils::clone)
+                            .andThen(r -> RobotUtils.modifyRobot(r, finalK, finalN))
                             .andThen(validationTask);
 
-
-                        //validationTask = ModifyRobot.modifyRobot(k).andThen(org.apache.commons.lang3.SerializationUtils::clone).andThen(validationTask);
-
-
+                        L.info(String.format(
+                            "Validation %s/%s of \"first\" best done",
+                            n,
+                            k
+                        ));
 
                         Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
+
                         try {
                           List<Object> values = new ArrayList<>();
                           values.addAll(validationKeyHeaders.stream().map(keys::get).collect(Collectors.toList()));
@@ -342,11 +336,13 @@ public class MainCoEvo extends Worker {
                                   .orElse(null))
                               .collect(Collectors.toList())
                           );
+
                           validationPrinter.printRecord(values);
                           validationPrinter.flush();
                         } catch (IOException e) {
                           L.severe(String.format("Cannot save validation results due to %s", e));
                         }
+
                       }
                     }
                   } catch (InterruptedException | ExecutionException e) {
@@ -373,7 +369,10 @@ public class MainCoEvo extends Worker {
   private static Outcome prototypeOutcome() {
     return new Outcome(
         0d, 10d, 0d, 0d, 0d,
-        new TreeMap<>(Map.of(0d, Point2.build(0d, 0d))),
+        new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
+            i -> (double) i / 10d,
+            i -> Point2.build(Math.sin((double) i / 10d), Math.sin((double) i / 5d))
+        ))),
         new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
             i -> (double) i / 10d,
             i -> new Footprint(new boolean[]{true, false, true}))
@@ -381,4 +380,5 @@ public class MainCoEvo extends Worker {
         new TreeMap<>(Map.of(0d, Grid.create(1, 1, true)))
     );
   }
+
 }

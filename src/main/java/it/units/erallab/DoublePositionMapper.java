@@ -1,6 +1,5 @@
 package it.units.erallab;
 
-import com.google.common.collect.Lists;
 import it.units.erallab.hmsrobots.core.controllers.DistributedSensing;
 import it.units.erallab.hmsrobots.core.controllers.MultiLayerPerceptron;
 import it.units.erallab.hmsrobots.core.objects.Robot;
@@ -32,7 +31,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
-
 
   private final boolean heterogeneous;
   private final int width;
@@ -120,11 +118,15 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
     // checks if the robot is connected
     body = Utils.gridLargestConnected(body, Objects::nonNull);
+    /*
+    // this for is not necessary
     for (Grid.Entry<SensingVoxel> entry : body) {
       if (entry.getValue() == null) {
         body.set(entry.getX(), entry.getY(), null);
       }
     }
+
+     */
 
     // creates a distributed controller
     DistributedSensing distributedSensing = new DistributedSensing(body, signals);
@@ -180,7 +182,7 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
 
-    DoublePositionMapper mapper = new DoublePositionMapper(false, 10, 10, sensors,true, innerNeurons, 0);
+    DoublePositionMapper mapper = new DoublePositionMapper(true, 10, 10, sensors,true, innerNeurons, 1);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
     //System.out.println("genotype length: " + mapper.getGenotypeSize()); // to know genotype size
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
