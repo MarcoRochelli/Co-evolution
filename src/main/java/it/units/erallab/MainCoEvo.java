@@ -199,7 +199,7 @@ public class MainCoEvo extends Worker {
                       heterogeneous = true;
                       position = false;
                     }
-                    case "position" -> {
+                    case "position" -> {  // position is only homogeneous
                       heterogeneous = false;
                       position = true;
                     }
@@ -211,10 +211,15 @@ public class MainCoEvo extends Worker {
                   IndependentFactory<List<Double>> factory;
                   switch (representation) {
                     case "bit" -> {
-                      mapper = new DoublePositionMapper(heterogeneous, width, height, sensors, position, innerNeurons, nOfSignals);
-                      //mapper = new DoubleMapper(control, width, height, sensors, innerNeurons, nOfSignals); // old mapper
-                      UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-                      factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
+                      if (!position) {
+                        mapper = new DoubleMapper(heterogeneous, width, height, sensors, innerNeurons, nOfSignals);
+                        UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+                        factory = new FixedLengthListFactory<>(((DoubleMapper) mapper).getGenotypeSize(), udf);
+                      } else {
+                        mapper = new DoublePositionMapper(heterogeneous, width, height, sensors, position, innerNeurons, nOfSignals);
+                        UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
+                        factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
+                      }
                     }
                     case "gaussian" -> {
                       mapper = new GaussianPositionMapper(heterogeneous, nOfGaussians, width, height, sensors, position, innerNeurons, nOfSignals);

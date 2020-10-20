@@ -169,7 +169,7 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
       innerNeurons[i] = random.nextInt();
     }
 
-    DoubleMapper mapper = new DoubleMapper(false, 10, 10, sensors, innerNeurons, 0);
+    DoubleMapper mapper = new DoubleMapper(true, 10, 10, sensors, innerNeurons, 0);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
     System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);

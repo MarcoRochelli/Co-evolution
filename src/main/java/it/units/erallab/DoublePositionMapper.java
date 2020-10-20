@@ -125,7 +125,6 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
         body.set(entry.getX(), entry.getY(), null);
       }
     }
-
      */
 
     // creates a distributed controller
@@ -182,7 +181,7 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
 
-    DoublePositionMapper mapper = new DoublePositionMapper(true, 10, 10, sensors,true, innerNeurons, 1);
+    DoublePositionMapper mapper = new DoublePositionMapper(false, 10, 10, sensors,false, innerNeurons, 1);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
     //System.out.println("genotype length: " + mapper.getGenotypeSize()); // to know genotype size
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
