@@ -60,8 +60,8 @@ public class MainCoEvo extends Worker {
     final int nOfGaussians = 5;
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
-    double episodeTime = d(a("episodeT", "10.0"));   // length of simulation
-    int nBirths = i(a("nBirths", "200"));           // total number of births not robots
+    double episodeTime = d(a("episodeT", "2.0"));   // length of simulation take care if too short gaits are not working!
+    int nBirths = i(a("nBirths", "1000"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));             // number of runs
 
     // THINGS I ADDED
@@ -73,7 +73,7 @@ public class MainCoEvo extends Worker {
 
     List<String> terrainNames = l(a("terrain", "flat"));
 
-    Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;
+    Function<Outcome, Double> fitnessFunction = Outcome::getDistance;              // FITNESS METRIC
     Function<Outcome, List<Item>> outcomeTransformer = o -> DataCollector.fromBean(
         o,
         true,
@@ -221,7 +221,7 @@ public class MainCoEvo extends Worker {
                         factory = new FixedLengthListFactory<>(((DoublePositionMapper) mapper).getGenotypeSize(), udf);
                       }
                     }
-                    case "gaussian" -> {
+                    case "gaussian" -> { // here position is not fixed
                       mapper = new GaussianPositionMapper(heterogeneous, nOfGaussians, width, height, sensors, position, innerNeurons, nOfSignals);
                       //mapper = new GaussianMapper(control, nOfGaussians, width, height, sensors, innerNeurons, nOfSignals);
                       factory = new GaussianFactory<>(((GaussianPositionMapper) mapper).getGenotypeSize(), nOfGaussians);
@@ -320,11 +320,14 @@ public class MainCoEvo extends Worker {
                             .andThen(r -> RobotUtils.modifyRobot(r, finalK, finalN))
                             .andThen(validationTask);
 
+                        /*
                         L.info(String.format(
                             "Validation %s/%s of \"first\" best done",
                             n,
                             k
                         ));
+
+                         */
 
                         Outcome validationOutcome = validationTask.apply(solutions.stream().findFirst().get());
 

@@ -100,7 +100,7 @@ public class ControllerComparison extends Worker {
   @Override
   public void run() {
     double episodeTime = d(a("episodeT", "10.0"));
-    int nBirths = i(a("nBirths", "100"));
+    int nBirths = i(a("nBirths", "1000"));
     int[] seeds = ri(a("seed", "0:1"));
     List<String> terrainNames = l(a("terrain", "flat"));
     List<String> evolverMapperNames = l(a("evolver", "mlp-0.65-cmaes"));

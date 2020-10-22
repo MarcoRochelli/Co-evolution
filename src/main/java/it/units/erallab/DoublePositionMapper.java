@@ -118,14 +118,6 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
     // checks if the robot is connected
     body = Utils.gridLargestConnected(body, Objects::nonNull);
-    /*
-    // this for is not necessary
-    for (Grid.Entry<SensingVoxel> entry : body) {
-      if (entry.getValue() == null) {
-        body.set(entry.getX(), entry.getY(), null);
-      }
-    }
-     */
 
     // creates a distributed controller
     DistributedSensing distributedSensing = new DistributedSensing(body, signals);
@@ -149,6 +141,11 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
         int to = from + nOfVoxelWeights;
         double[] voxelWeights = Arrays.copyOfRange(weights, from, to);
         mlp.setParams(voxelWeights);
+
+
+        System.out.println("parto da: " + from);
+        System.out.println("fino a: " + to);
+
       } else {
         // i have to assign the correct subset of weights to this
         mlp.setParams(weights);
@@ -158,15 +155,13 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
     return new Robot<>(
         distributedSensing,
-        body //SerializationUtils.clone(body) i think it is better not to copy this
+        body
     );
   }
-
 
   // to test the mapper
   public static void main(String[] args) {
     Random random = new Random();
-
     // problem to solve
     Locomotion locomotion = new Locomotion(
         40,
@@ -181,13 +176,12 @@ public class DoublePositionMapper implements Function<List<Double>, Robot<?>> {
 
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
 
-    DoublePositionMapper mapper = new DoublePositionMapper(false, 10, 10, sensors,false, innerNeurons, 1);
+    DoublePositionMapper mapper = new DoublePositionMapper(false, 5, 5, sensors,true, innerNeurons, 1);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-    //System.out.println("genotype length: " + mapper.getGenotypeSize()); // to know genotype size
+    System.out.println("genotype length: " + mapper.getGenotypeSize()); // to know genotype size
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
     List<Double> genotype = factory.build(random);
     Robot<?> robot = mapper.apply(genotype);
-
 
     Grid<Pair<String, Robot<?>>> namedSolutionGrid = Grid.create(1, 1);
     namedSolutionGrid.set(0, 0, Pair.of("monster", robot));

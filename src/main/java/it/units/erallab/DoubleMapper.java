@@ -92,11 +92,6 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
 
     // checks if the robot is connected
     body = Utils.gridLargestConnected(body, Objects::nonNull);
-    for (Grid.Entry<SensingVoxel> entry : body) {
-      if (entry.getValue() == null) {
-        body.set(entry.getX(), entry.getY(), null);
-      }
-    }
 
     // creates a distributed controller
     DistributedSensing distributedSensing = new DistributedSensing(body, signals);
@@ -119,7 +114,6 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
         int from = entry.getX() * nOfVoxelWeights + entry.getY() * width * nOfVoxelWeights; //  + width * height is not needed because i remove it before
         int to = from + nOfVoxelWeights;
         double[] voxelWeights = Arrays.copyOfRange(weights, from, to);
-
         /*
         System.out.println("parto da: " + from);
         System.out.println("fino a: " + to);
@@ -127,9 +121,7 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
           System.out.println("voxelWeights:[" + i + "] " + voxelWeights[i]);
         }
          */
-
         mlp.setParams(voxelWeights);
-
       } else {
         // i have to assign the correct subset of weights to this
         mlp.setParams(weights);
@@ -153,7 +145,6 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
         ));
          */
     Random random = new Random();
-
     // problem to solve
     Locomotion locomotion = new Locomotion(
         40,
@@ -165,9 +156,6 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
         new Normalization(new AreaRatio())
     );
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
-    for (int i = 0; i < innerNeurons.length; i++) {
-      innerNeurons[i] = random.nextInt();
-    }
 
     DoubleMapper mapper = new DoubleMapper(true, 10, 10, sensors, innerNeurons, 0);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
