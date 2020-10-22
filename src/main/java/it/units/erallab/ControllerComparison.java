@@ -99,37 +99,63 @@ public class ControllerComparison extends Worker {
 
   @Override
   public void run() {
-    double episodeTime = d(a("episodeT", "10.0"));
-    int nBirths = i(a("nBirths", "1000"));
+    int nOfFrequencies = 5;
+    double episodeTime = d(a("episodeT", "30"));
+    int nBirths = i(a("nBirths", "500"));
     int[] seeds = ri(a("seed", "0:1"));
     List<String> terrainNames = l(a("terrain", "flat"));
     List<String> evolverMapperNames = l(a("evolver", "mlp-0.65-cmaes"));
-    List<String> bodyNames = l(a("body", "biped-4x3-f-f"));
+    List<String> bodyNames = l(a("body", "biped-4x2-f-f"));
     List<String> transformationNames = l(a("transformations", "identity"));
     List<String> robotMapperNames = l(a("mapper", "centralized"));
-    Function<Outcome, Double> fitnessFunction = Outcome::getCorrectedEfficiency;
-    Function<Outcome, List<Item>> outcomeTransformer = o -> DataCollector.fromBean(
-        o,
-        true,
-        Map.of(
-            Double.TYPE, "%5.3f",
-            List.class, "%30.30s",
-            Grid.class, "%30.30s"
+    Function<Outcome, Double> fitnessFunction = Outcome::getVelocity;
+    Function<Outcome, List<Item>> outcomeTransformer = o -> concat(
+        List.of(
+            new Item("area.ratio.power", o.getAreaRatioPower(), "%5.1f"),
+            new Item("control.power", o.getControlPower(), "%5.1f"),
+            new Item("corrected.efficiency", o.getCorrectedEfficiency(), "%6.3f"),
+            new Item("distance", o.getDistance(), "%5.1f"),
+            new Item("velocity", o.getVelocity(), "%6.3f"),
+            new Item(
+                "average.posture",
+                Grid.toString(o.getAveragePosture(), (Predicate<Boolean>) b -> b, "|"),
+                "%10.10s"
+            )
         ),
-        Map.of(
-            List.class, l -> ((List<?>) l).stream()
-                .map(Object::toString)
-                .collect(Collectors.joining("|")),
-            Grid.class, g -> Grid.create((Grid<Boolean>) g, b -> b ? 'o' : '.').rows().stream()
-                .map(r -> r.stream()
-                    .map(c -> Character.toString(c))
-                    .collect(Collectors.joining()))
-                .collect(Collectors.joining("|"))
-        )
+        ifThenElse(
+            (Predicate<Outcome.Gait>) Objects::isNull,
+            g -> new ArrayList<Item>(),
+            g -> List.of(
+                new Item("gait.average.touch.area", g.getAvgTouchArea(), "%5.3f"),
+                new Item("gait.coverage", g.getCoverage(), "%4.2f"),
+                new Item("gait.mode.interval", g.getModeInterval(), "%3.1f"),
+                new Item("gait.purity", g.getPurity(), "%4.2f"),
+                new Item("gait.num.footprints", g.getNOfUniqueFootprints(), "%2d"),
+                new Item("gait.footprints", g.getFootprints().stream().map(Footprint::toString).collect(Collectors.joining("|")), "%40.40s")
+            )
+        ).apply(o.getMainGait()),
+        index(o.getMainFrequencies(Outcome.Component.X)).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .limit(nOfFrequencies)
+            .map(e -> List.of(
+                new Item(String.format("mode.x.%d.f", e.getKey() + 1), e.getValue().getFrequency(), "%3.1f"),
+                new Item(String.format("mode.x.%d.s", e.getKey() + 1), e.getValue().getStrength(), "%4.1f")
+            ))
+            .reduce(ControllerComparison::concat)
+            .orElse(List.of()),
+        index(o.getMainFrequencies(Outcome.Component.Y)).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .limit(nOfFrequencies)
+            .map(e -> List.of(
+                new Item(String.format("mode.y.%d.f", e.getKey() + 1), e.getValue().getFrequency(), "%3.1f"),
+                new Item(String.format("mode.y.%d.s", e.getKey() + 1), e.getValue().getStrength(), "%4.1f")
+            ))
+            .reduce(ControllerComparison::concat)
+            .orElse(List.of())
     );
     List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
     List<String> validationTransformationNames = l(a("validationTransformations", "")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
-    List<String> validationTerrainNames = l(a("validationTerrains", "flat,hilly-0.5-5-0")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
+    List<String> validationTerrainNames = l(a("validationTerrains", "flat")).stream().filter(s -> !s.isEmpty()).collect(Collectors.toList());
     if (!validationTerrainNames.isEmpty() && validationTransformationNames.isEmpty()) {
       validationTransformationNames.add("identity");
     }
@@ -138,21 +164,20 @@ public class ControllerComparison extends Worker {
     }
     Settings physicsSettings = new Settings();
     //prepare file listeners
-    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
-        a("dir", "C:\\Users\\marco\\Desktop")),
-        a("fileStats", "stats.txt")
+    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>(
+        a("dir", "."),
+        a("statsFile", null)
     );
-
-    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
-        a("dir", "C:\\Users\\marco\\Desktop")),
-        a("fileSerialized", "serialized.txt")
+    MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>(
+        a("dir", "."),
+        a("serializedFile", null)
     );
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
     try {
-      if (a("validationFile", "validation.txt") != null) {  // change this befor putting it on cluster
+      if (a("validationFile", null) != null) {
         validationPrinter = new CSVPrinter(new FileWriter(
-            a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("validationFile", "validation.txt")
+            a("dir", ".") + File.separator + a("validationFile", null)
         ), CSVFormat.DEFAULT.withDelimiter(';'));
       } else {
         validationPrinter = new CSVPrinter(System.out, CSVFormat.DEFAULT.withDelimiter(';'));
@@ -205,7 +230,7 @@ public class ControllerComparison extends Worker {
                     new Basic(),
                     new Population(),
                     new Diversity(),
-                    new BestInfo("%5.2f"),
+                    new BestInfo("%6.4f"),
                     new FunctionOfOneBest<>(
                         ((Function<Individual<?, ? extends Robot<SensingVoxel>, ? extends Double>, Robot<SensingVoxel>>) Individual::getSolution)
                             .andThen(org.apache.commons.lang3.SerializationUtils::clone)
@@ -534,6 +559,27 @@ public class ControllerComparison extends Worker {
         )),
         new TreeMap<>(Map.of(0d, Grid.create(1, 1, true)))
     );
+  }
+
+  @SafeVarargs
+  private static <K> List<K> concat(List<K>... lists) {
+    List<K> all = new ArrayList<>();
+    for (List<K> list : lists) {
+      all.addAll(list);
+    }
+    return all;
+  }
+
+  private static <K, T> Function<K, T> ifThenElse(Predicate<K> predicate, Function<K, T> thenFunction, Function<K, T> elseFunction) {
+    return k -> predicate.test(k) ? thenFunction.apply(k) : elseFunction.apply(k);
+  }
+
+  private static <K> SortedMap<Integer, K> index(List<K> list) {
+    SortedMap<Integer, K> map = new TreeMap<>();
+    for (int i = 0; i < list.size(); i++) {
+      map.put(i, list.get(i));
+    }
+    return map;
   }
 
 }
