@@ -236,7 +236,7 @@ public class ControllerComparison extends Worker {
                     )
                 ));
                 Listener<? super Object, ? super Robot<?>, ? super Double> listener;
-                if (statsFileName == null) {
+                if (statsFileName == null) {  // change also this ################################################
                   listener = listener(collectors.toArray(DataCollector[]::new));
                 } else {
                   listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
