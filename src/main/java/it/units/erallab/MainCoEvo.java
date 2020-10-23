@@ -15,7 +15,9 @@ import it.units.malelab.jgea.core.Individual;
 import it.units.malelab.jgea.core.evolver.CMAESEvolver;
 import it.units.malelab.jgea.core.evolver.Evolver;
 import it.units.malelab.jgea.core.evolver.stopcondition.Births;
+import it.units.malelab.jgea.core.listener.FileListenerFactory;
 import it.units.malelab.jgea.core.listener.Listener;
+import it.units.malelab.jgea.core.listener.ListnerFactory;
 import it.units.malelab.jgea.core.listener.MultiFileListenerFactory;
 import it.units.malelab.jgea.core.listener.collector.*;
 import it.units.malelab.jgea.core.order.PartialComparator;
@@ -76,6 +78,10 @@ public class MainCoEvo extends Worker {
     List<String> terrainNames = l(a("terrain", "flat"));
 
     Function<Outcome, Double> fitnessFunction = Outcome::getDistance;              // FITNESS METRIC
+
+
+
+    // OLD
     Function<Outcome, List<Item>> outcomeTransformer = o -> concat(
         List.of(
             new Item("area.ratio.power", o.getAreaRatioPower(), "%5.1f"),
@@ -120,7 +126,61 @@ public class MainCoEvo extends Worker {
             .reduce(MainCoEvo::concat)
             .orElse(List.of())
     );
-    // i think i have to put here also my metrics
+
+    //NEW
+    // i think i have to put here also my metrics !!!!!!!!!!!!!!! ASK
+
+    Function<Outcome, List<Item>> outcomeTransformer = o -> Utils.concat(
+        List.of(
+            new Item("area.ratio.power", o.getAreaRatioPower(), "%5.1f"),
+            new Item("control.power", o.getControlPower(), "%5.1f"),
+            new Item("corrected.efficiency", o.getCorrectedEfficiency(), "%6.3f"),
+            new Item("distance", o.getDistance(), "%5.1f"),
+            new Item("velocity", o.getVelocity(), "%6.3f"),
+            new Item(
+                "average.posture",
+                Grid.toString(o.getAveragePosture(), (Predicate<Boolean>) b -> b, "|"),
+                "%10.10s"
+            )
+        ),
+        Utils.ifThenElse(
+            (Predicate<Outcome.Gait>) Objects::isNull,
+            g -> new ArrayList<Item>(),
+            g -> List.of(
+                new Item("gait.average.touch.area", g.getAvgTouchArea(), "%5.3f"),
+                new Item("gait.coverage", g.getCoverage(), "%4.2f"),
+                new Item("gait.mode.interval", g.getModeInterval(), "%3.1f"),
+                new Item("gait.purity", g.getPurity(), "%4.2f"),
+                new Item("gait.num.unique.footprints", g.getFootprints().stream().distinct().count(), "%2d"),
+                new Item("gait.num.footprints", g.getFootprints().size(), "%2d"),
+                new Item("gait.footprints", g.getFootprints().stream().map(Footprint::toString).collect(Collectors.joining("|")), "%10.10s")
+            )
+        ).apply(o.getMainGait()),
+        Utils.index(o.getCenterModes(Outcome.Component.X)).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .limit(nOfModes)
+            .map(e -> List.of(
+                new Item(String.format("mode.x.%d.f", e.getKey() + 1), e.getValue().getFrequency(), "%3.1f"),
+                new Item(String.format("mode.x.%d.s", e.getKey() + 1), e.getValue().getStrength(), "%4.1f")
+            ))
+            .reduce(Utils::concat)
+            .orElse(List.of()),
+        Utils.index(o.getCenterModes(Outcome.Component.Y)).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .limit(nOfModes)
+            .map(e -> List.of(
+                new Item(String.format("mode.y.%d.f", e.getKey() + 1), e.getValue().getFrequency(), "%3.1f"),
+                new Item(String.format("mode.y.%d.s", e.getKey() + 1), e.getValue().getStrength(), "%4.1f")
+            ))
+            .reduce(Utils::concat)
+            .orElse(List.of())
+    );
+
+
+
+
+
+
 
 
 
@@ -128,6 +188,7 @@ public class MainCoEvo extends Worker {
     List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
 
     Settings physicsSettings = new Settings();
+    /* // old
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
         a("dir", "C:\\Users\\marco\\Desktop")),
@@ -137,6 +198,23 @@ public class MainCoEvo extends Worker {
         a("dir", "C:\\Users\\marco\\Desktop")),
         a("fileSerialized", "serialized.txt")
     );
+     */
+
+    // NEW
+    //prepare file listeners
+    String statsFileName = a("statsFile", "stats.txt") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("statsFile", null);
+    String serializedFileName = a("serializedFile", "serialized.txt") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("serializedFile", null);
+    ListnerFactory<Object, Robot<?>, Double> statsListenerFactory = new FileListenerFactory<>(statsFileName);
+    ListnerFactory<Object, Robot<?>, Double> serializedListenerFactory = new FileListenerFactory<>(serializedFileName);
+
+
+
+
+
+
+
+
+
 
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "size", "controller", "sensor.config", "representation", "signals");
@@ -295,6 +373,15 @@ public class MainCoEvo extends Worker {
                           )
                       )
                   ));
+
+
+
+
+
+
+                  // OLD
+
+                  /*
                   Listener<? super Object, ? super Robot<?>, ? super Double> listener;
                   if (statsListenerFactory.getBaseFileName() == null) {
                     listener = listener(collectors.toArray(DataCollector[]::new));
@@ -312,6 +399,35 @@ public class MainCoEvo extends Worker {
                         ))
                     ).then(listener);
                   }
+
+                   */
+
+                  // NEW
+                  Listener<? super Object, ? super Robot<?>, ? super Double> listener;
+                  if (statsFileName == null) {
+                    listener = listener(collectors.toArray(DataCollector[]::new));
+                  } else {
+                    listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
+                  }
+                  if (serializedFileName != null) {
+                    listener = serializedListenerFactory.build(
+                        new Static(keys),
+                        new Basic(),
+                        new FunctionOfOneBest<>(i -> List.of(
+                            new Item("fitness.value", i.getFitness(), "%7.5f"),
+                            new Item("serialized.robot", Utils.safelySerialize(i.getSolution()), "%s"),
+                            new Item("serialized.genotype", Utils.safelySerialize((Serializable) i.getGenotype()), "%s")
+                        ))
+                    ).then(listener);
+                  }
+
+
+
+
+
+
+
+
                   try {
                     Stopwatch stopwatch = Stopwatch.createStarted();
                     L.info(String.format("Starting %s", keys));
