@@ -71,7 +71,7 @@ public class MainCoEvo extends Worker {
     List<String> controllers = l(a("controllers", "homogeneous,heterogeneous,position"));  // homogenous,heterogeneous or position
     List<String> sensorsConfig = l(a("sensorsConfig", "vel-area-touch")); // vel-area or vel-area-touch
     List<String> representations = l(a("representation", "bit"));   // bit or gaussian
-    List<String> signals = l(a("signal", "1"));   // can be 0,1,2 or 4
+    List<String> signals = l(a("signal", "0,1,2"));   // can be 0,1,2 or 4
 
     List<String> terrainNames = l(a("terrain", "flat"));
 
