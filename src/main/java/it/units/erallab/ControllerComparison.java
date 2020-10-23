@@ -101,7 +101,7 @@ public class ControllerComparison extends Worker {
   public void run() {
     int nOfModes = 5;
     Settings physicsSettings = new Settings();
-    double episodeTime = d(a("episodeT", "30"));
+    double episodeTime = d(a("episodeT", "2.0"));
     int nBirths = i(a("nBirths", "500"));
     int[] seeds = ri(a("seed", "0:1"));
     List<String> terrainNames = l(a("terrain", "flat"));
@@ -164,11 +164,13 @@ public class ControllerComparison extends Worker {
     if (validationTerrainNames.isEmpty() && !validationTransformationNames.isEmpty()) {
       validationTerrainNames.add(terrainNames.get(0));
     }
+
     //prepare file listeners
-    String statsFileName = a("statsFile", null) == null ? null : a("dir", ".") + File.separator + a("statsFile", null);
-    String serializedFileName = a("serializedFile", null) == null ? null : a("dir", ".") + File.separator + a("serializedFile", null);
+    String statsFileName = a("statsFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("statsFile", "stats.txt");
+    String serializedFileName = a("serializedFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("serializedFile", "serialized.txt");
     ListnerFactory<Object, Robot<?>, Double> statsListenerFactory = new FileListenerFactory<>(statsFileName);
     ListnerFactory<Object, Robot<?>, Double> serializedListenerFactory = new FileListenerFactory<>(serializedFileName);
+
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
     try {
@@ -236,7 +238,7 @@ public class ControllerComparison extends Worker {
                     )
                 ));
                 Listener<? super Object, ? super Robot<?>, ? super Double> listener;
-                if (statsFileName == null) {  // change also this ################################################
+                if (statsFileName == null) {
                   listener = listener(collectors.toArray(DataCollector[]::new));
                 } else {
                   listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
