@@ -34,6 +34,7 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -53,7 +54,8 @@ public class MainCoEvo extends Worker {
 
   @Override
   public void run() {
-    Random random = new Random();
+    int nOfFrequencies = 5;
+    //Random random = new Random();
     // settings for the simulation
     final int numberOfValidations = 10;
     final int sizeOfvalidation = 3;
@@ -61,7 +63,7 @@ public class MainCoEvo extends Worker {
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
     double episodeTime = d(a("episodeT", "2.0"));   // length of simulation take care if too short gaits are not working!
-    int nBirths = i(a("nBirths", "1000"));           // total number of births not robots
+    int nBirths = i(a("nBirths", "100"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));             // number of runs
 
     // THINGS I ADDED
@@ -74,32 +76,62 @@ public class MainCoEvo extends Worker {
     List<String> terrainNames = l(a("terrain", "flat"));
 
     Function<Outcome, Double> fitnessFunction = Outcome::getDistance;              // FITNESS METRIC
-    Function<Outcome, List<Item>> outcomeTransformer = o -> DataCollector.fromBean(
-        o,
-        true,
-        Map.of(
-            Double.TYPE, "%5.3f",
-            List.class, "%30.30s",
-            Grid.class, "%30.30s"
+    Function<Outcome, List<Item>> outcomeTransformer = o -> concat(
+        List.of(
+            new Item("area.ratio.power", o.getAreaRatioPower(), "%5.1f"),
+            new Item("control.power", o.getControlPower(), "%5.1f"),
+            new Item("corrected.efficiency", o.getCorrectedEfficiency(), "%6.3f"),
+            new Item("distance", o.getDistance(), "%5.1f"),
+            new Item("velocity", o.getVelocity(), "%6.3f"),
+            new Item(
+                "average.posture",
+                Grid.toString(o.getAveragePosture(), (Predicate<Boolean>) b -> b, "|"),
+                "%10.10s"
+            )
         ),
-        Map.of(
-            List.class, l -> ((List<?>) l).stream()
-                .map(Object::toString)
-                .collect(Collectors.joining("|")),
-            Grid.class, g -> Grid.create((Grid<Boolean>) g, b -> b ? 'o' : '.').rows().stream()
-                .map(r -> r.stream()
-                    .map(c -> Character.toString(c))
-                    .collect(Collectors.joining()))
-                .collect(Collectors.joining("|"))
-        )
+        ifThenElse(
+            (Predicate<Outcome.Gait>) Objects::isNull,
+            g -> new ArrayList<Item>(),
+            g -> List.of(
+                new Item("gait.average.touch.area", g.getAvgTouchArea(), "%5.3f"),
+                new Item("gait.coverage", g.getCoverage(), "%4.2f"),
+                new Item("gait.mode.interval", g.getModeInterval(), "%3.1f"),
+                new Item("gait.purity", g.getPurity(), "%4.2f"),
+                new Item("gait.num.footprints", g.getNOfUniqueFootprints(), "%2d"),
+                new Item("gait.footprints", g.getFootprints().stream().map(Footprint::toString).collect(Collectors.joining("|")), "%40.40s")
+            )
+        ).apply(o.getMainGait()),
+        index(o.getMainFrequencies(Outcome.Component.X)).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .limit(nOfFrequencies)
+            .map(e -> List.of(
+                new Item(String.format("mode.x.%d.f", e.getKey() + 1), e.getValue().getFrequency(), "%3.1f"),
+                new Item(String.format("mode.x.%d.s", e.getKey() + 1), e.getValue().getStrength(), "%4.1f")
+            ))
+            .reduce(MainCoEvo::concat)
+            .orElse(List.of()),
+        index(o.getMainFrequencies(Outcome.Component.Y)).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .limit(nOfFrequencies)
+            .map(e -> List.of(
+                new Item(String.format("mode.y.%d.f", e.getKey() + 1), e.getValue().getFrequency(), "%3.1f"),
+                new Item(String.format("mode.y.%d.s", e.getKey() + 1), e.getValue().getStrength(), "%4.1f")
+            ))
+            .reduce(MainCoEvo::concat)
+            .orElse(List.of())
     );
+    // i think i have to put here also my metrics
+
+
+
+
     List<String> validationOutcomeHeaders = outcomeTransformer.apply(prototypeOutcome()).stream().map(Item::getName).collect(Collectors.toList());
 
     Settings physicsSettings = new Settings();
     //prepare file listeners
     MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
         a("dir", "C:\\Users\\marco\\Desktop")),
-        a("fileStats", "stats.txt")
+        a("fileStats", "stats-%s.txt")
     );
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>((
         a("dir", "C:\\Users\\marco\\Desktop")),
@@ -292,7 +324,7 @@ public class MainCoEvo extends Worker {
                     Collection<Robot<?>> solutions = evolver.solve(
                         trainingTask.andThen(fitnessFunction),  // this should be ok
                         new Births(nBirths),
-                        random,
+                        new Random(seed),   // this can not be random because it would be casual but it has to be pseudo-casual
                         executorService,
                         Listener.onExecutor(
                             listener,
@@ -387,6 +419,27 @@ public class MainCoEvo extends Worker {
         )),
         new TreeMap<>(Map.of(0d, Grid.create(1, 1, true)))
     );
+  }
+
+  @SafeVarargs
+  private static <K> List<K> concat(List<K>... lists) {
+    List<K> all = new ArrayList<>();
+    for (List<K> list : lists) {
+      all.addAll(list);
+    }
+    return all;
+  }
+
+  private static <K, T> Function<K, T> ifThenElse(Predicate<K> predicate, Function<K, T> thenFunction, Function<K, T> elseFunction) {
+    return k -> predicate.test(k) ? thenFunction.apply(k) : elseFunction.apply(k);
+  }
+
+  private static <K> SortedMap<Integer, K> index(List<K> list) {
+    SortedMap<Integer, K> map = new TreeMap<>();
+    for (int i = 0; i < list.size(); i++) {
+      map.put(i, list.get(i));
+    }
+    return map;
   }
 
 }

@@ -101,7 +101,7 @@ public class ControllerComparison extends Worker {
   public void run() {
     int nOfFrequencies = 5;
     double episodeTime = d(a("episodeT", "30"));
-    int nBirths = i(a("nBirths", "500"));
+    int nBirths = i(a("nBirths", "100"));
     int[] seeds = ri(a("seed", "0:1"));
     List<String> terrainNames = l(a("terrain", "flat"));
     List<String> evolverMapperNames = l(a("evolver", "mlp-0.65-cmaes"));
@@ -164,9 +164,9 @@ public class ControllerComparison extends Worker {
     }
     Settings physicsSettings = new Settings();
     //prepare file listeners
-    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>(
-        a("dir", "."),
-        a("statsFile", null)
+    MultiFileListenerFactory<Object, Robot<?>, Double> statsListenerFactory = new MultiFileListenerFactory<>((
+        a("dir", "C:\\Users\\marco\\Desktop")),
+        a("fileStats", "stats.txt")
     );
     MultiFileListenerFactory<Object, Robot<?>, Double> serializedListenerFactory = new MultiFileListenerFactory<>(
         a("dir", "."),
