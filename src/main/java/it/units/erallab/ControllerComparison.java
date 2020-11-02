@@ -166,8 +166,14 @@ public class ControllerComparison extends Worker {
     }
 
     //prepare file listeners
-    String statsFileName = a("statsFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("statsFile", "stats.txt");
-    String serializedFileName = a("serializedFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("serializedFile", "serialized.txt");
+    String statsFileName = a("statsFile", null) == null ? null : a("dir", ".") + File.separator + a("statsFile", null);
+    String serializedFileName = a("serializedFile", null) == null ? null : a("dir", ".") + File.separator + a("serializedFile", null);
+
+    // to save stats on desktop
+    //String statsFileName = a("statsFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("statsFile", "stats.txt");
+    //String serializedFileName = a("serializedFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("serializedFile", "serialized.txt");
+
+
     ListnerFactory<Object, Robot<?>, Double> statsListenerFactory = new FileListenerFactory<>(statsFileName);
     ListnerFactory<Object, Robot<?>, Double> serializedListenerFactory = new FileListenerFactory<>(serializedFileName);
 

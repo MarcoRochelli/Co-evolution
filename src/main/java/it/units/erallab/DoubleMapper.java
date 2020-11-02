@@ -157,9 +157,9 @@ public class DoubleMapper implements Function<List<Double>, Robot<?>> {
     );
     int[] innerNeurons = new int[0]; // if more than 0 gives error: not enough heap memory
 
-    DoubleMapper mapper = new DoubleMapper(true, 10, 10, sensors, innerNeurons, 0);
+    DoubleMapper mapper = new DoubleMapper(true, 5, 5, sensors, innerNeurons, 2);
     UniformDoubleFactory udf = new UniformDoubleFactory(-1, 1);
-    System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
+    //System.out.println("lunghezza genotipo: " + mapper.getGenotypeSize()); // to know genotype size
     FixedLengthListFactory<Double> factory = new FixedLengthListFactory<>(mapper.getGenotypeSize(), udf);
     List<Double> genotype = factory.build(random);
     Robot<?> robot = mapper.apply(genotype);

@@ -43,7 +43,7 @@ import static it.units.malelab.jgea.core.util.Args.*;
 
 public class MainCoEvo extends Worker {
 
-  public static final int CACHE_SIZE = 10000;
+  public static final int CACHE_SIZE = 1000;
 
   public MainCoEvo(String[] args) {
     super(args);
@@ -63,19 +63,19 @@ public class MainCoEvo extends Worker {
     int[] innerNeurons = new int[0]; // array that sets number of inner neuron for each layer
 
     double episodeTime = d(a("episodeT", "2.0"));   // length of simulation take care if too short gaits are not working!
-    int nBirths = i(a("nBirths", "200"));           // total number of births not robots
+    int nBirths = i(a("nBirths", "50"));           // total number of births not robots
     int[] seeds = ri(a("seed", "0:1"));             // number of runs
 
     // THINGS I ADDED
     List<String> sizes = l(a("sizes", "5x5")); //5x5 or 10x10
     List<String> controllers = l(a("controllers", "homogeneous,heterogeneous,position"));  // homogenous,heterogeneous or position
     List<String> sensorsConfig = l(a("sensorsConfig", "vel-area-touch")); // vel-area or vel-area-touch
-    List<String> representations = l(a("representation", "bit"));   // bit or gaussian
-    List<String> signals = l(a("signal", "0,1,2"));   // can be 0,1,2 or 4
+    List<String> representations = l(a("representations", "bit"));   // bit or gaussian
+    List<String> signals = l(a("signals", "1,2"));   // can be 0,1,2 or 3
 
     List<String> terrainNames = l(a("terrain", "flat"));
 
-    Function<Outcome, Double> fitnessFunction = Outcome::getDistance;              // FITNESS METRIC
+    Function<Outcome, Double> fitnessFunction = Outcome::getVelocity;              // FITNESS METRIC
 
     Function<Outcome, List<Item>> outcomeTransformer = o -> Utils.concat(
         List.of(
@@ -127,9 +127,14 @@ public class MainCoEvo extends Worker {
 
     Settings physicsSettings = new Settings();
 
-    //prepare file listeners
-    String statsFileName = a("statsFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("statsFile", "stats.txt");
-    String serializedFileName = a("serializedFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("serializedFile", "serialized.txt");
+    //prepare file listeners  // TAKE CARE fileStats not statsFile
+    //String statsFileName = a("fileStats", null) == null ? null : a("dir", ".") + File.separator + a("fileStats", null);
+    //String serializedFileName = a("fileSerialized", null) == null ? null : a("dir", ".") + File.separator + a("fileSerialized", null);
+
+    // to save stats on desktop
+    String statsFileName = a("fileStats", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileStats", "stats.txt");
+    String serializedFileName = a("fileSerialized", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileSerialized", "serialized.txt");
+
     ListnerFactory<Object, Robot<?>, Double> statsListenerFactory = new FileListenerFactory<>(statsFileName);
     ListnerFactory<Object, Robot<?>, Double> serializedListenerFactory = new FileListenerFactory<>(serializedFileName);
 
@@ -155,10 +160,10 @@ public class MainCoEvo extends Worker {
 
     //summarize params
     L.info("Terrains: " + terrainNames);
-    L.info("Controller: " + controllers);
-    L.info("Size: " + sizes);
-    L.info("SensorConfig: " + sensorsConfig);
-    L.info("Representation: " + representations);
+    L.info("Controllers: " + controllers);
+    L.info("Sizes: " + sizes);
+    L.info("SensorsConfig: " + sensorsConfig);
+    L.info("Representations: " + representations);
     L.info("Signals: " + signals);
     //start iterations
     for (int seed : seeds) {
@@ -210,7 +215,7 @@ public class MainCoEvo extends Worker {
                     case "0" -> 0;
                     case "1" -> 1;
                     case "2" -> 2;
-                    case "4" -> 4;
+                    case "3" -> 3;
                     default -> throw new IllegalArgumentException("incorrect signal string");
                   };
 
