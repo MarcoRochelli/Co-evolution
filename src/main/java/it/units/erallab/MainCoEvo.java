@@ -9,6 +9,7 @@ import it.units.erallab.hmsrobots.tasks.locomotion.Locomotion;
 import it.units.erallab.hmsrobots.tasks.locomotion.Outcome;
 import it.units.erallab.hmsrobots.util.Grid;
 import it.units.erallab.hmsrobots.util.Point2;
+import it.units.erallab.hmsrobots.util.SerializationUtils;
 import it.units.malelab.jgea.Worker;
 import it.units.malelab.jgea.core.IndependentFactory;
 import it.units.malelab.jgea.core.Individual;
@@ -71,7 +72,7 @@ public class MainCoEvo extends Worker {
     List<String> controllers = l(a("controllers", "homogeneous,heterogeneous,position"));  // homogenous,heterogeneous or position
     List<String> sensorsConfig = l(a("sensorsConfig", "vel-area-touch")); // vel-area or vel-area-touch
     List<String> representations = l(a("representations", "bit"));   // bit or gaussian
-    List<String> signals = l(a("signals", "1,2"));   // can be 0,1,2 or 3
+    List<String> signals = l(a("signals", "1"));   // can be 0,1,2 or 3
 
     List<String> terrainNames = l(a("terrain", "flat"));
 
@@ -79,6 +80,8 @@ public class MainCoEvo extends Worker {
 
     Function<Outcome, List<Item>> outcomeTransformer = o -> Utils.concat(
         List.of(
+            new Item("computation.time", o.getComputationTime(), "%4.1f"),
+            new Item("time", o.getTime(), "%4.1f"),
             new Item("area.ratio.power", o.getAreaRatioPower(), "%5.1f"),
             new Item("control.power", o.getControlPower(), "%5.1f"),
             new Item("corrected.efficiency", o.getCorrectedEfficiency(), "%6.3f"),
@@ -308,9 +311,7 @@ public class MainCoEvo extends Worker {
                         new Static(keys),
                         new Basic(),
                         new FunctionOfOneBest<>(i -> List.of(
-                            new Item("fitness.value", i.getFitness(), "%7.5f"),
-                            new Item("serialized.robot", Utils.safelySerialize(i.getSolution()), "%s"),
-                            new Item("serialized.genotype", Utils.safelySerialize((Serializable) i.getGenotype()), "%s")
+                            new Item("serialized.robot", SerializationUtils.serialize(i.getSolution(), SerializationUtils.Mode.GZIPPED_JSON), "%s")
                         ))
                     ).then(listener);
                   }
@@ -398,7 +399,7 @@ public class MainCoEvo extends Worker {
 
   private static Outcome prototypeOutcome() {
     return new Outcome(
-        0d, 10d, 0d, 0d, 0d,
+        0d, 0d, 10d, 0d, 0d, 0d,
         new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
             i -> (double) i / 10d,
             i -> Point2.build(Math.sin((double) i / 10d), Math.sin((double) i / 5d))

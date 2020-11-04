@@ -173,8 +173,8 @@ public class ControllerComparison extends Worker {
     }
 
     //prepare file listeners
-    String statsFileName = a("statsFile", null) == null ? null : a("dir", ".") + File.separator + a("statsFile", null);
-    String serializedFileName = a("serializedFile", null) == null ? null : a("dir", ".") + File.separator + a("serializedFile", null);
+    String statsFileName = a("fileStats", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileStats", "stats.txt");
+    String serializedFileName = a("fileSerialized", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileSerialized", "serialized.txt");
 
     // to save stats on desktop
     //String statsFileName = a("statsFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("statsFile", "stats.txt");
