@@ -102,7 +102,7 @@ public class ControllerComparison extends Worker {
   public void run() {
     int nOfModes = 5;
     Settings physicsSettings = new Settings();
-    double episodeTime = d(a("episodeT", "2.0"));
+    double episodeTime = d(a("episodeTime", "30"));
     int nBirths = i(a("nBirths", "500"));
     int[] seeds = ri(a("seed", "0:1"));
     String experimentName = a("expName", "");
@@ -171,19 +171,11 @@ public class ControllerComparison extends Worker {
     if (validationTerrainNames.isEmpty() && !validationTransformationNames.isEmpty()) {
       validationTerrainNames.add(terrainNames.get(0));
     }
-
     //prepare file listeners
-    String statsFileName = a("fileStats", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileStats", "stats.txt");
-    String serializedFileName = a("fileSerialized", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileSerialized", "serialized.txt");
-
-    // to save stats on desktop
-    //String statsFileName = a("statsFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("statsFile", "stats.txt");
-    //String serializedFileName = a("serializedFile", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("serializedFile", "serialized.txt");
-
-
+    String statsFileName = a("statsFile", null) == null ? null : a("dir", ".") + File.separator + a("statsFile", null);
+    String serializedFileName = a("serializedFile", null) == null ? null : a("dir", ".") + File.separator + a("serializedFile", null);
     ListnerFactory<Object, Robot<?>, Double> statsListenerFactory = new FileListenerFactory<>(statsFileName);
     ListnerFactory<Object, Robot<?>, Double> serializedListenerFactory = new FileListenerFactory<>(serializedFileName);
-
     CSVPrinter validationPrinter;
     List<String> validationKeyHeaders = List.of("seed", "terrain", "body", "mapper", "transformation", "evolver");
     try {
@@ -255,7 +247,7 @@ public class ControllerComparison extends Worker {
                     )
                 ));
                 Listener<? super Object, ? super Robot<?>, ? super Double> listener;
-                if (statsFileName == null) {
+                if (statsFileName == null) {  // change also this ################################################
                   listener = listener(collectors.toArray(DataCollector[]::new));
                 } else {
                   listener = statsListenerFactory.build(collectors.toArray(DataCollector[]::new));
@@ -562,7 +554,7 @@ public class ControllerComparison extends Worker {
 
   private static Outcome prototypeOutcome() {
     return new Outcome(
-        0d, 0d, 10d, 0d, 0d, 0d,
+        0d, 0d, 10d, 0, 0d, 0d,
         new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
             i -> (double) i / 10d,
             i -> Point2.build(Math.sin((double) i / 10d), Math.sin((double) i / 5d))
