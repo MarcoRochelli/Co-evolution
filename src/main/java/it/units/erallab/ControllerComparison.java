@@ -102,8 +102,8 @@ public class ControllerComparison extends Worker {
   public void run() {
     int nOfModes = 5;
     Settings physicsSettings = new Settings();
-    double episodeTime = d(a("episodeTime", "30"));
-    int nBirths = i(a("nBirths", "500"));
+    double episodeTime = d(a("episodeTime", "3"));
+    int nBirths = i(a("nBirths", "100"));
     int[] seeds = ri(a("seed", "0:1"));
     String experimentName = a("expName", "");
     List<String> terrainNames = l(a("terrain", "flat"));
@@ -172,8 +172,9 @@ public class ControllerComparison extends Worker {
       validationTerrainNames.add(terrainNames.get(0));
     }
     //prepare file listeners
-    String statsFileName = a("statsFile", null) == null ? null : a("dir", ".") + File.separator + a("statsFile", null);
-    String serializedFileName = a("serializedFile", null) == null ? null : a("dir", ".") + File.separator + a("serializedFile", null);
+    // to save stats on desktop
+    String statsFileName = a("fileStats", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileStats", "stats.txt");
+    String serializedFileName = a("fileSerialized", ".") == null ? null : a("dir", "C:\\Users\\marco\\Desktop") + File.separator + a("fileSerialized", "serialized.txt");
     ListnerFactory<Object, Robot<?>, Double> statsListenerFactory = new FileListenerFactory<>(statsFileName);
     ListnerFactory<Object, Robot<?>, Double> serializedListenerFactory = new FileListenerFactory<>(serializedFileName);
     CSVPrinter validationPrinter;
