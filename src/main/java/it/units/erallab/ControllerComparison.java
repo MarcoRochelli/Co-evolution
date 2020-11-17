@@ -102,7 +102,7 @@ public class ControllerComparison extends Worker {
   public void run() {
     int nOfModes = 5;
     Settings physicsSettings = new Settings();
-    double episodeTime = d(a("episodeT", "30"));
+    double episodeTime = d(a("episodeTime", "30"));
     int nBirths = i(a("nBirths", "500"));
     int[] seeds = ri(a("seed", "0:1"));
     String experimentName = a("expName", "");
@@ -554,7 +554,7 @@ public class ControllerComparison extends Worker {
 
   private static Outcome prototypeOutcome() {
     return new Outcome(
-        0d, 0d, 10d, 0d, 0d, 0d,
+        0d, 0d, 10d, 0, 0d, 0d,
         new TreeMap<>(IntStream.range(0, 100).boxed().collect(Collectors.toMap(
             i -> (double) i / 10d,
             i -> Point2.build(Math.sin((double) i / 10d), Math.sin((double) i / 5d))
